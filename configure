@@ -878,6 +878,7 @@ CONFIG_LIST="
     avformat
     avisynth
     bzlib
+    crystalhd
     dct
     doc
     dwt
@@ -1221,6 +1222,14 @@ binkaudio_dct_decoder_select="mdct rdft dct"
 binkaudio_rdft_decoder_select="mdct rdft"
 cavs_decoder_select="golomb"
 cook_decoder_select="mdct"
+crystalhd_decoder_select="crystalhd"
+chdh264_decoder_select="crystalhd"
+chdmpeg1_decoder_select="crystalhd"
+chdmpeg2_decoder_select="crystalhd"
+chddivx_decoder_select="crystalhd"
+chddivx3_decoder_select="crystalhd"
+chdvc1_decoder_select="crystalhd"
+chdwmv3_decoder_select="crystalhd"
 cscd_decoder_suggest="zlib"
 dca_decoder_select="mdct"
 dnxhd_encoder_select="aandct"
@@ -1338,6 +1347,7 @@ zlib_encoder_select="zlib"
 zmbv_decoder_select="zlib"
 zmbv_encoder_select="zlib"
 
+crystalhd_deps="libcrystalhd_libcrystalhd_if_h"
 vaapi_deps="va_va_h"
 vdpau_deps="vdpau_vdpau_h vdpau_vdpau_x11_h"
 
@@ -2760,6 +2770,7 @@ check_func_headers windows.h VirtualAlloc
 check_header conio.h
 check_header dlfcn.h
 check_header dxva2api.h
+check_header libcrystalhd/libcrystalhd_if.h
 check_header malloc.h
 check_header poll.h
 check_header sys/mman.h
@@ -2809,6 +2820,7 @@ done
 
 check_lib math.h sin -lm
 disabled vaapi || check_lib va/va.h vaInitialize -lva
+disabled crystalhd || check_lib libcrystalhd/libcrystalhd_if.h DtsGetVersion -lcrystalhd
 
 check_mathfunc exp2
 check_mathfunc exp2f
