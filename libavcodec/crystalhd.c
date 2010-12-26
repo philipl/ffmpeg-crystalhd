@@ -172,27 +172,24 @@ static int extract_sps_pps_from_avcc(CHDContext *priv,
 }
 
 
-static uint8_t dll2subtype(CHDContext *priv, const char *dll)
+static uint8_t id2subtype(CHDContext *priv, enum CodecID id)
 {
-    if (strcmp(dll, "chddivx") == 0) {
+    switch (id) {
+    case CODEC_ID_MPEG4:
         return BC_MSUBTYPE_DIVX;
-    } else if (strcmp(dll, "chddivx3") == 0) {
+    case CODEC_ID_MSMPEG4V3:
         return BC_MSUBTYPE_DIVX311;
-    } else if (strcmp(dll, "chdmpeg1") == 0) {
+    case CODEC_ID_MPEG1VIDEO:
         return BC_MSUBTYPE_MPEG1VIDEO;
-    } else if (strcmp(dll, "chdmpeg2") == 0) {
+    case CODEC_ID_MPEG2VIDEO:
         return BC_MSUBTYPE_MPEG2VIDEO;
-    } else if (strcmp(dll, "chdvc1") == 0) {
+    case CODEC_ID_VC1:
         return BC_MSUBTYPE_VC1;
-    } else if (strcmp(dll, "chdwvc1") == 0) {
-        return BC_MSUBTYPE_WVC1;
-    } else if (strcmp(dll, "chdwmv3") == 0) {
+    case CODEC_ID_WMV3:
         return BC_MSUBTYPE_WMV3;
-    } else if (strcmp(dll, "chdwmva") == 0) {
-        return BC_MSUBTYPE_WMVA;
-    } else if (strcmp(dll, "chdh264") == 0) {
+    case CODEC_ID_H264:
         return priv->is_nal ? BC_MSUBTYPE_AVC1 : BC_MSUBTYPE_H264;
-    } else {
+    default:
         return BC_MSUBTYPE_INVALID;
     }
 }
@@ -310,7 +307,7 @@ static av_cold int init(AVCodecContext *avctx)
     format.width = avctx->width;
     format.height = avctx->height;
 
-    subtype = dll2subtype(priv, avctx->codec->name);
+    subtype = id2subtype(priv, avctx->codec->id);
     switch (subtype) {
     case BC_MSUBTYPE_AVC1:
         format.startCodeSz = priv->nal_length_size;
