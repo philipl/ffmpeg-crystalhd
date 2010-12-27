@@ -27,6 +27,7 @@
  * Includes
  ****************************************************************************/
 
+#define _GNU_SOURCE
 #include <emmintrin.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,7 +39,11 @@
 
 #include "avcodec.h"
 #include "libavutil/intreadwrite.h"
+#ifdef CONFIG_FASTMEMCPY
 #include "libvo/fastmemcpy.h"
+#else
+#define fast_memcpy(d, s, l) memcpy(d, s, l)
+#endif
 
 #define OUTPUT_PROC_TIMEOUT 2000
 
@@ -63,19 +68,19 @@ typedef struct CHDContext {
  * Static function Declarations
  ****************************************************************************/
 
-static uint8_t receive_frame(AVCodecContext *avctx, void *data,
-                             int *data_size);
-static uint8_t copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
-                          void *data, int *data_size);
+static inline int receive_frame(AVCodecContext *avctx, void *data,
+                                int *data_size);
+static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
+                             void *data, int *data_size);
 
 
 /*****************************************************************************
  * Helper functions
  ****************************************************************************/
 
-static int extract_sps_pps_from_avcc(CHDContext *priv,
-                                     uint8_t *data,
-                                     uint32_t data_size)
+static inline int extract_sps_pps_from_avcc(CHDContext *priv,
+                                            uint8_t *data,
+                                            uint32_t data_size)
 {
     int profile;
     unsigned int nal_size;
@@ -172,7 +177,7 @@ static int extract_sps_pps_from_avcc(CHDContext *priv,
 }
 
 
-static uint8_t id2subtype(CHDContext *priv, enum CodecID id)
+static inline uint8_t id2subtype(CHDContext *priv, enum CodecID id)
 {
     switch (id) {
     case CODEC_ID_MPEG4:
@@ -194,7 +199,7 @@ static uint8_t id2subtype(CHDContext *priv, enum CodecID id)
     }
 }
 
-static void print_frame_info(CHDContext *priv, BC_DTS_PROC_OUT *output)
+static inline void print_frame_info(CHDContext *priv, BC_DTS_PROC_OUT *output)
 {
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tYBuffSz: %u\n", output->YbuffSz);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tYBuffDoneSz: %u\n",
@@ -234,6 +239,23 @@ static void print_frame_info(CHDContext *priv, BC_DTS_PROC_OUT *output)
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tH264 Valid Fields: 0x%08x\n",
            output->PicInfo.other.h264.valid);
 }
+
+#ifndef CONFIG_FASTMEMCPY
+static inline void *memcpy_pic(void *dst, const void *src,
+                               int bytesPerLine, int height,
+                               int dstStride, int srcStride)
+{
+    int i;
+    void *retval = dst;
+
+    for(i = 0; i < height; i++) {
+        memcpy(dst, src, bytesPerLine);
+        src = (uint8_t*)src + srcStride;
+        dst = (uint8_t*)dst + dstStride;
+    }
+    return retval;
+}
+#endif
 
 
 /*****************************************************************************
@@ -462,7 +484,8 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
 }
 
 
-static uint8_t receive_frame(AVCodecContext *avctx, void *data, int *data_size)
+static inline int receive_frame(AVCodecContext *avctx,
+                                void *data, int *data_size)
 {
     BC_STATUS ret;
     BC_DTS_PROC_OUT output;
@@ -486,7 +509,7 @@ static uint8_t receive_frame(AVCodecContext *avctx, void *data, int *data_size)
         }
         return 1;
     } else if (ret == BC_STS_SUCCESS) {
-        uint8_t ffret = -1;
+        int ffret = -1;
         if (output.PoutFlags & BC_POUT_FLAGS_PIB_VALID) {
             print_frame_info(priv, &output);
             ffret = copy_frame(avctx, &output, data, data_size);
@@ -500,7 +523,7 @@ static uint8_t receive_frame(AVCodecContext *avctx, void *data, int *data_size)
         return ffret;
     } else if (ret == BC_STS_BUSY) {
         usleep(1000);
-        return 1;
+        return 0;
     } else {
         av_log(avctx, AV_LOG_ERROR, "CrystalHD: ProcOutput failed %d\n",
                ret);
@@ -509,8 +532,8 @@ static uint8_t receive_frame(AVCodecContext *avctx, void *data, int *data_size)
 }
 
 
-static uint8_t copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
-                          void *data, int *data_size)
+static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
+                             void *data, int *data_size)
 {
     CHDContext *priv = avctx->priv_data;
 
