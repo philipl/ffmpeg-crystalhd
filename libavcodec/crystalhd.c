@@ -577,8 +577,8 @@ static uint8_t copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
 }
 
 
-AVCodec chdh264_decoder = {
-    "chdh264",
+AVCodec h264_crystalhd_decoder = {
+    "h264_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_H264,
     sizeof(CHDContext),
@@ -592,8 +592,8 @@ AVCodec chdh264_decoder = {
     .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 
-AVCodec chdmpeg1_decoder = {
-    "chdmpeg1",
+AVCodec mpeg1_crystalhd_decoder = {
+    "mpeg1_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_MPEG1VIDEO,
     sizeof(CHDContext),
@@ -607,8 +607,8 @@ AVCodec chdmpeg1_decoder = {
     .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 
-AVCodec chdmpeg2_decoder = {
-    "chdmpeg2",
+AVCodec mpeg2_crystalhd_decoder = {
+    "mpeg2_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_MPEG2VIDEO,
     sizeof(CHDContext),
@@ -622,8 +622,8 @@ AVCodec chdmpeg2_decoder = {
     .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 
-AVCodec chddivx_decoder = {
-    "chddivx",
+AVCodec mpeg4_crystalhd_decoder = {
+    "mpeg4_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_MPEG4,
     sizeof(CHDContext),
@@ -637,8 +637,8 @@ AVCodec chddivx_decoder = {
     .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 
-AVCodec chddivx3_decoder = {
-    "chddivx3",
+AVCodec msmpeg4_crystalhd_decoder = {
+    "msmpeg4_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_MSMPEG4V3,
     sizeof(CHDContext),
@@ -652,8 +652,8 @@ AVCodec chddivx3_decoder = {
     .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 
-AVCodec chdvc1_decoder = {
-    "chdvc1",
+AVCodec vc1_crystalhd_decoder = {
+    "vc1_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_VC1,
     sizeof(CHDContext),
@@ -667,8 +667,8 @@ AVCodec chdvc1_decoder = {
     .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 
-AVCodec chdwmv3_decoder = {
-    "chdwmv3",
+AVCodec wmv3_crystalhd_decoder = {
+    "wmv3_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_WMV3,
     sizeof(CHDContext),
