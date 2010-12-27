@@ -176,7 +176,6 @@ static inline int extract_sps_pps_from_avcc(CHDContext *priv,
     return 0;
 }
 
-
 static inline uint8_t id2subtype(CHDContext *priv, enum CodecID id)
 {
     switch (id) {
@@ -208,7 +207,7 @@ static inline void print_frame_info(CHDContext *priv, BC_DTS_PROC_OUT *output)
            output->UVBuffDoneSz);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tTimestamp: %lu\n",
            output->PicInfo.timeStamp);
-    av_log(priv->avctx, AV_LOG_VERBOSE, "\tPicture Number: %u\n", 
+    av_log(priv->avctx, AV_LOG_VERBOSE, "\tPicture Number: %u\n",
            output->PicInfo.picture_number);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tWidth: %u\n",
            output->PicInfo.width);
@@ -417,7 +416,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
     HANDLE dev = priv->dev;
     uint8_t input_full = 0;
     int len = avpkt->size;
-    uint8_t ffret;
+    int rec_ret;
 
     av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: decode_frame\n");
 
@@ -467,17 +466,17 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
         return 0;
     }
 
-    ffret = receive_frame(avctx, data, data_size);
-    if (ffret == 0 && *data_size == 0) {
+    rec_ret = receive_frame(avctx, data, data_size);
+    if (rec_ret == 0 && *data_size == 0) {
         ret = DtsGetDriverStatus(dev, &decoder_status);
         if (ret == BC_STS_SUCCESS && decoder_status.ReadyListCount > 0) {
-            ffret = receive_frame(avctx, data, data_size);
-            if (ffret == 0 && *data_size > 0) {
+            rec_ret = receive_frame(avctx, data, data_size);
+            if (rec_ret == 0 && *data_size > 0) {
                 av_log(avctx, AV_LOG_VERBOSE,
                        "CrystalHD: Got second field on first call.\n");
             }
         }
-    } else if (ffret == 1) {
+    } else if (rec_ret == 1) {
        receive_frame(avctx, data, data_size);
     }
     return len;
@@ -509,10 +508,10 @@ static inline int receive_frame(AVCodecContext *avctx,
         }
         return 1;
     } else if (ret == BC_STS_SUCCESS) {
-        int ffret = -1;
+        int copy_ret = -1;
         if (output.PoutFlags & BC_POUT_FLAGS_PIB_VALID) {
             print_frame_info(priv, &output);
-            ffret = copy_frame(avctx, &output, data, data_size);
+            copy_ret = copy_frame(avctx, &output, data, data_size);
         }
         DtsReleaseOutputBuffs(dev, NULL, FALSE);
 
@@ -520,13 +519,12 @@ static inline int receive_frame(AVCodecContext *avctx,
         if (*data_size > 0) {
             avctx->has_b_frames--;
         }
-        return ffret;
+        return copy_ret;
     } else if (ret == BC_STS_BUSY) {
         usleep(1000);
         return 0;
     } else {
-        av_log(avctx, AV_LOG_ERROR, "CrystalHD: ProcOutput failed %d\n",
-               ret);
+        av_log(avctx, AV_LOG_ERROR, "CrystalHD: ProcOutput failed %d\n", ret);
         return -1;
     }
 }
@@ -552,7 +550,8 @@ static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
     uint8_t *dst;
     int dStride;
 
-    priv->pic.buffer_hints = FF_BUFFER_HINTS_VALID | FF_BUFFER_HINTS_PRESERVE | FF_BUFFER_HINTS_REUSABLE;
+    priv->pic.buffer_hints = FF_BUFFER_HINTS_VALID | FF_BUFFER_HINTS_PRESERVE |
+                             FF_BUFFER_HINTS_REUSABLE;
     if(avctx->reget_buffer(avctx, &priv->pic) < 0) {
         av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
         return -1;
