@@ -61,6 +61,8 @@ typedef struct CHDContext {
     uint32_t sps_pps_size;
     uint8_t nal_length_size;
     uint8_t is_nal;
+
+    uint64_t last_picture;
 } CHDContext;
 
 
@@ -266,6 +268,7 @@ static void flush(AVCodecContext *avctx)
     CHDContext *priv = avctx->priv_data;
 
     avctx->has_b_frames = 0;
+    priv->last_picture = 2;
     DtsFlushInput(priv->dev, 4);
 }
 
@@ -320,6 +323,7 @@ static av_cold int init(AVCodecContext *avctx)
     priv = avctx->priv_data;
     priv->avctx = avctx;
     priv->is_nal = extradata_size > 0 && *extradata == 1;
+    priv->last_picture = 2;
 
     memset(&format, 0, sizeof(BC_INPUT_FORMAT));
     format.FGTEnable = FALSE;
@@ -427,7 +431,10 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                 uint64_t pts = avpkt->pts == AV_NOPTS_VALUE ? 0 : avpkt->pts;
                 ret = DtsProcInput(dev, avpkt->data, len, pts, 0);
                 if (ret == BC_STS_BUSY) {
-                    usleep(1000);
+                    av_log(avctx, AV_LOG_WARNING,
+                           "CrystalHD: ProcInput returned busy\n");
+                    usleep(10000);
+                    return -1;
                 } else if (ret != BC_STS_SUCCESS) {
                     av_log(avctx, AV_LOG_ERROR,
                            "CrystalHD: ProcInput failed: %u\n", ret);
@@ -455,13 +462,13 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
          * No frames ready. Don't try to extract.
          */
         if (decoder_status.ReadyListCount == 0) {
-            usleep(1000);
+            usleep(50000);
         } else {
             break;
         }
     } while (input_full == 1);
     if (decoder_status.ReadyListCount == 0) {
-        av_log(avctx, AV_LOG_INFO,
+        av_log(avctx, AV_LOG_VERBOSE,
                "CrystalHD: No frames ready. Returning\n");
         return 0;
     }
@@ -511,17 +518,36 @@ static inline int receive_frame(AVCodecContext *avctx,
         int copy_ret = -1;
         if (output.PoutFlags & BC_POUT_FLAGS_PIB_VALID) {
             print_frame_info(priv, &output);
+
+            if (priv->last_picture + 1 < output.PicInfo.picture_number) {
+                av_log(avctx, AV_LOG_WARNING,
+                       "CrystalHD: Picture Number discontinuity\n");
+                /*
+                 * Have we lost frames? If so, we need to shrink the
+                 * pipeline length appropriately.
+                 */
+            }
+
             copy_ret = copy_frame(avctx, &output, data, data_size);
+            if (*data_size > 0) {
+                avctx->has_b_frames--;
+                priv->last_picture++;
+                av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Pipeline length: %u\n",
+                       avctx->has_b_frames);
+            }
+        } else {
+            /*
+             * An invalid frame has been consumed.
+             */
+            av_log(avctx, AV_LOG_ERROR, "CrystalHD: ProcOutput succeeded with "
+                                        "invalid PIB\n");
+            avctx->has_b_frames--;
+            copy_ret = 0;
         }
         DtsReleaseOutputBuffs(dev, NULL, FALSE);
 
-        av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Returning Frame\n");
-        if (*data_size > 0) {
-            avctx->has_b_frames--;
-        }
         return copy_ret;
     } else if (ret == BC_STS_BUSY) {
-        usleep(1000);
         return 0;
     } else {
         av_log(avctx, AV_LOG_ERROR, "CrystalHD: ProcOutput failed %d\n", ret);
