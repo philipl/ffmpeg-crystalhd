@@ -4,7 +4,7 @@
  * Copyright(C) 2010 Philip Langdale <ffmpeg.philipl@overt.org>
  *
  * Credits:
- * extract_sps_pps_from_avcc: from xbmc
+ * extract_sps_pps_from_avcc: from gstbcmdec
  *
  * This file is part of FFmpeg.
  *
@@ -27,8 +27,8 @@
  * Includes
  ****************************************************************************/
 
+/* Need _GNU_SOURCE to get usleep() */
 #define _GNU_SOURCE
-#include <emmintrin.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -109,19 +109,16 @@ static inline int extract_sps_pps_from_avcc(CHDContext *priv,
     data += 6;
     data_size -= 6;
 
-    for (unsigned int i = 0; i < num_sps; i++)
-    {
-        if (data_size < 2) {
+    for (unsigned int i = 0; i < num_sps; i++) {
+        if (data_size < 2)
             return -1;
-        }
 
         nal_size = AV_RB16(data);
         data += 2;
         data_size -= 2;
 
-        if (data_size < nal_size) {
+        if (data_size < nal_size)
             return -1;
-        }
 
         priv->sps_pps_buf[0] = 0;
         priv->sps_pps_buf[1] = 0;
@@ -137,27 +134,23 @@ static inline int extract_sps_pps_from_avcc(CHDContext *priv,
         data_size -= nal_size;
     }
 
-    if (data_size < 1) {
+    if (data_size < 1)
         return -1;
-    }
 
     num_pps = data[0];
     data += 1;
     data_size -= 1;
 
-    for (unsigned int i = 0; i < num_pps; i++)
-    {
-        if (data_size < 2) {
+    for (unsigned int i = 0; i < num_pps; i++) {
+        if (data_size < 2)
             return -1;
-        }
 
         nal_size = AV_RB16(data);
         data += 2;
         data_size -= 2;
 
-        if (data_size < nal_size) {
+        if (data_size < nal_size)
             return -1;
-        }
 
         priv->sps_pps_buf[priv->sps_pps_size + 0] = 0;
         priv->sps_pps_buf[priv->sps_pps_size + 1] = 0;
@@ -278,9 +271,8 @@ static av_cold int uninit(AVCodecContext *avctx)
     CHDContext *priv = avctx->priv_data;
     HANDLE device;
 
-    if(!priv) {
+    if (!priv)
         return 0;
-    }
 
     device = priv->dev;
     DtsStopDecoder(device);
@@ -289,9 +281,8 @@ static av_cold int uninit(AVCodecContext *avctx)
 
     av_free(priv->sps_pps_buf);
 
-    if (priv->pic.data[0]) {
+    if (priv->pic.data[0])
         avctx->release_buffer(avctx, &priv->pic);
-    }
 
     return 0;
 }
@@ -510,9 +501,8 @@ static inline int receive_frame(AVCodecContext *avctx,
         av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Initial format change\n");
         avctx->width = output.PicInfo.width;
         avctx->height = output.PicInfo.height;
-        if (output.PicInfo.height == 1088) {
+        if (output.PicInfo.height == 1088)
             avctx->height = 1080;
-        }
         return 1;
     } else if (ret == BC_STS_SUCCESS) {
         int copy_ret = -1;
@@ -603,18 +593,16 @@ static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
 
         for (sY = 0; sY < height; dY++, sY++) {
             fast_memcpy(&(dst[dY * dStride]), &(src[sY * width]), width);
-            if (interlaced) {
+            if (interlaced)
                 dY++;
-            }
         }
     } else {
         memcpy_pic(dst, src, width, height, dStride, width);
     }
 
     priv->pic.interlaced_frame = interlaced;
-    if (interlaced) {
+    if (interlaced)
         priv->pic.top_field_first = !bottom_first;
-    }
 
     if (!need_second_field) {
         *data_size = sizeof(AVFrame);
