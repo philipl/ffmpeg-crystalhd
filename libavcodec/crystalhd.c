@@ -40,11 +40,6 @@
 
 #include "avcodec.h"
 #include "libavutil/intreadwrite.h"
-#ifdef CONFIG_FASTMEMCPY
-#include "libvo/fastmemcpy.h"
-#else
-#define fast_memcpy(d, s, l) memcpy(d, s, l)
-#endif
 
 #define OUTPUT_PROC_TIMEOUT 2000
 
@@ -225,7 +220,6 @@ static inline void print_frame_info(CHDContext *priv, BC_DTS_PROC_OUT *output)
            output->PicInfo.other.h264.valid);
 }
 
-#ifndef CONFIG_FASTMEMCPY
 static inline void *memcpy_pic(void *dst, const void *src,
                                int bytesPerLine, int height,
                                int dstStride, int srcStride)
@@ -240,7 +234,6 @@ static inline void *memcpy_pic(void *dst, const void *src,
     }
     return retval;
 }
-#endif
 
 
 /*****************************************************************************
@@ -440,7 +433,7 @@ static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
         }
 
         for (sY = 0; sY < height; dY++, sY++) {
-            fast_memcpy(&(dst[dY * dStride]), &(src[sY * width]), width);
+            memcpy(&(dst[dY * dStride]), &(src[sY * width]), width);
             if (interlaced)
                 dY++;
         }
