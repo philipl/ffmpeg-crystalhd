@@ -67,16 +67,6 @@ typedef struct CHDContext {
 
 
 /*****************************************************************************
- * Static function Declarations
- ****************************************************************************/
-
-static inline int receive_frame(AVCodecContext *avctx, void *data,
-                                int *data_size);
-static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
-                             void *data, int *data_size);
-
-
-/*****************************************************************************
  * Helper functions
  ****************************************************************************/
 
@@ -403,6 +393,138 @@ static av_cold int init(AVCodecContext *avctx)
 }
 
 
+static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
+                             void *data, int *data_size)
+{
+    CHDContext *priv = avctx->priv_data;
+
+    uint8_t interlaced =  (output->PicInfo.flags & VDEC_FLAG_INTERLACED_SRC) &&
+                         !(output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC);
+    uint8_t bottom_field = (output->PicInfo.flags & VDEC_FLAG_BOTTOMFIELD) ==
+                           VDEC_FLAG_BOTTOMFIELD;
+    uint8_t bottom_first = output->PicInfo.flags & VDEC_FLAG_BOTTOM_FIRST;
+    uint8_t need_second_field = interlaced &&
+                                ((!bottom_field && !bottom_first) ||
+                                 (bottom_field && bottom_first));
+
+    int width = output->PicInfo.width * 2; // 16bits per pixel
+    int height = output->PicInfo.height;
+    uint8_t *src = output->Ybuff;
+    uint8_t *dst;
+    int dStride;
+
+    priv->pic.buffer_hints = FF_BUFFER_HINTS_VALID | FF_BUFFER_HINTS_PRESERVE |
+                             FF_BUFFER_HINTS_REUSABLE;
+    if(avctx->reget_buffer(avctx, &priv->pic) < 0) {
+        av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
+        return -1;
+    }
+
+    dStride = priv->pic.linesize[0];
+    dst = priv->pic.data[0];
+
+    av_log(priv->avctx, AV_LOG_VERBOSE, "CrystalHD: Copying out frame\n");
+
+    if (interlaced) {
+        int dY = 0;
+        int sY = 0;
+
+        height /= 2;
+        if (bottom_field) {
+            av_log(priv->avctx, AV_LOG_VERBOSE, "Interlaced: bottom field\n");
+            dY = 1;
+        } else {
+            av_log(priv->avctx, AV_LOG_VERBOSE, "Interlaced: top field\n");
+            dY = 0;
+        }
+
+        for (sY = 0; sY < height; dY++, sY++) {
+            fast_memcpy(&(dst[dY * dStride]), &(src[sY * width]), width);
+            if (interlaced)
+                dY++;
+        }
+    } else {
+        memcpy_pic(dst, src, width, height, dStride, width);
+    }
+
+    priv->pic.interlaced_frame = interlaced;
+    if (interlaced)
+        priv->pic.top_field_first = !bottom_first;
+
+    if (!need_second_field) {
+        *data_size = sizeof(AVFrame);
+        *(AVFrame *)data = priv->pic;
+    }
+
+    return 0;
+}
+
+
+static inline int receive_frame(AVCodecContext *avctx,
+                                void *data, int *data_size)
+{
+    BC_STATUS ret;
+    BC_DTS_PROC_OUT output;
+    CHDContext *priv = avctx->priv_data;
+    HANDLE dev = priv->dev;
+
+    *data_size = 0;
+
+    memset(&output, 0, sizeof(BC_DTS_PROC_OUT));
+    output.PicInfo.width = avctx->width;
+    output.PicInfo.height = avctx->height;
+
+    // Request decoded data from the driver
+    ret = DtsProcOutputNoCopy(dev, OUTPUT_PROC_TIMEOUT, &output);
+    if (ret == BC_STS_FMT_CHANGE) {
+        av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Initial format change\n");
+        avctx->width = output.PicInfo.width;
+        avctx->height = output.PicInfo.height;
+        if (output.PicInfo.height == 1088)
+            avctx->height = 1080;
+        return 1;
+    } else if (ret == BC_STS_SUCCESS) {
+        int copy_ret = -1;
+        if (output.PoutFlags & BC_POUT_FLAGS_PIB_VALID) {
+            print_frame_info(priv, &output);
+
+            if (priv->last_picture + 1 < output.PicInfo.picture_number) {
+                av_log(avctx, AV_LOG_WARNING,
+                       "CrystalHD: Picture Number discontinuity\n");
+                /*
+                 * Have we lost frames? If so, we need to shrink the
+                 * pipeline length appropriately.
+                 */
+            }
+
+            copy_ret = copy_frame(avctx, &output, data, data_size);
+            if (*data_size > 0) {
+                avctx->has_b_frames--;
+                priv->last_picture++;
+                av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Pipeline length: %u\n",
+                       avctx->has_b_frames);
+            }
+        } else {
+            /*
+             * An invalid frame has been consumed.
+             */
+            av_log(avctx, AV_LOG_ERROR, "CrystalHD: ProcOutput succeeded with "
+                                        "invalid PIB\n");
+            avctx->has_b_frames--;
+            copy_ret = 0;
+        }
+        DtsReleaseOutputBuffs(dev, NULL, FALSE);
+
+        return copy_ret;
+    } else if (ret == BC_STS_BUSY) {
+        return 0;
+    } else {
+        av_log(avctx, AV_LOG_ERROR, "CrystalHD: ProcOutput failed %d\n", ret);
+        return -1;
+    }
+}
+
+
 static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *avpkt)
 {
     BC_STATUS ret;
@@ -478,138 +600,6 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
        receive_frame(avctx, data, data_size);
     }
     return len;
-}
-
-
-static inline int receive_frame(AVCodecContext *avctx,
-                                void *data, int *data_size)
-{
-    BC_STATUS ret;
-    BC_DTS_PROC_OUT output;
-    CHDContext *priv = avctx->priv_data;
-    HANDLE dev = priv->dev;
-
-    *data_size = 0;
-
-    memset(&output, 0, sizeof(BC_DTS_PROC_OUT));
-    output.PicInfo.width = avctx->width;
-    output.PicInfo.height = avctx->height;
-
-    // Request decoded data from the driver
-    ret = DtsProcOutputNoCopy(dev, OUTPUT_PROC_TIMEOUT, &output);
-    if (ret == BC_STS_FMT_CHANGE) {
-        av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Initial format change\n");
-        avctx->width = output.PicInfo.width;
-        avctx->height = output.PicInfo.height;
-        if (output.PicInfo.height == 1088)
-            avctx->height = 1080;
-        return 1;
-    } else if (ret == BC_STS_SUCCESS) {
-        int copy_ret = -1;
-        if (output.PoutFlags & BC_POUT_FLAGS_PIB_VALID) {
-            print_frame_info(priv, &output);
-
-            if (priv->last_picture + 1 < output.PicInfo.picture_number) {
-                av_log(avctx, AV_LOG_WARNING,
-                       "CrystalHD: Picture Number discontinuity\n");
-                /*
-                 * Have we lost frames? If so, we need to shrink the
-                 * pipeline length appropriately.
-                 */
-            }
-
-            copy_ret = copy_frame(avctx, &output, data, data_size);
-            if (*data_size > 0) {
-                avctx->has_b_frames--;
-                priv->last_picture++;
-                av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Pipeline length: %u\n",
-                       avctx->has_b_frames);
-            }
-        } else {
-            /*
-             * An invalid frame has been consumed.
-             */
-            av_log(avctx, AV_LOG_ERROR, "CrystalHD: ProcOutput succeeded with "
-                                        "invalid PIB\n");
-            avctx->has_b_frames--;
-            copy_ret = 0;
-        }
-        DtsReleaseOutputBuffs(dev, NULL, FALSE);
-
-        return copy_ret;
-    } else if (ret == BC_STS_BUSY) {
-        return 0;
-    } else {
-        av_log(avctx, AV_LOG_ERROR, "CrystalHD: ProcOutput failed %d\n", ret);
-        return -1;
-    }
-}
-
-
-static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
-                             void *data, int *data_size)
-{
-    CHDContext *priv = avctx->priv_data;
-
-    uint8_t interlaced =  (output->PicInfo.flags & VDEC_FLAG_INTERLACED_SRC) &&
-                         !(output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC);
-    uint8_t bottom_field = (output->PicInfo.flags & VDEC_FLAG_BOTTOMFIELD) ==
-                           VDEC_FLAG_BOTTOMFIELD;
-    uint8_t bottom_first = output->PicInfo.flags & VDEC_FLAG_BOTTOM_FIRST;
-    uint8_t need_second_field = interlaced &&
-                                ((!bottom_field && !bottom_first) ||
-                                 (bottom_field && bottom_first));
-
-    int width = output->PicInfo.width * 2; // 16bits per pixel
-    int height = output->PicInfo.height;
-    uint8_t *src = output->Ybuff;
-    uint8_t *dst;
-    int dStride;
-
-    priv->pic.buffer_hints = FF_BUFFER_HINTS_VALID | FF_BUFFER_HINTS_PRESERVE |
-                             FF_BUFFER_HINTS_REUSABLE;
-    if(avctx->reget_buffer(avctx, &priv->pic) < 0) {
-        av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
-        return -1;
-    }
-
-    dStride = priv->pic.linesize[0];
-    dst = priv->pic.data[0];
-
-    av_log(priv->avctx, AV_LOG_VERBOSE, "CrystalHD: Copying out frame\n");
-
-    if (interlaced) {
-        int dY = 0;
-        int sY = 0;
-
-        height /= 2;
-        if (bottom_field) {
-            av_log(priv->avctx, AV_LOG_VERBOSE, "Interlaced: bottom field\n");
-            dY = 1;
-        } else {
-            av_log(priv->avctx, AV_LOG_VERBOSE, "Interlaced: top field\n");
-            dY = 0;
-        }
-
-        for (sY = 0; sY < height; dY++, sY++) {
-            fast_memcpy(&(dst[dY * dStride]), &(src[sY * width]), width);
-            if (interlaced)
-                dY++;
-        }
-    } else {
-        memcpy_pic(dst, src, width, height, dStride, width);
-    }
-
-    priv->pic.interlaced_frame = interlaced;
-    if (interlaced)
-        priv->pic.top_field_first = !bottom_first;
-
-    if (!need_second_field) {
-        *data_size = sizeof(AVFrame);
-        *(AVFrame *)data = priv->pic;
-    }
-
-    return 0;
 }
 
 
