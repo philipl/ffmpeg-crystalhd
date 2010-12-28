@@ -29,8 +29,7 @@
  * Includes
  ****************************************************************************/
 
-/* Need _GNU_SOURCE to get usleep() */
-#define _GNU_SOURCE
+#define _XOPEN_SOURCE 600
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
