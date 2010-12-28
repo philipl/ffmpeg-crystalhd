@@ -5,6 +5,8 @@
  *
  * Credits:
  * extract_sps_pps_from_avcc: from gstbcmdec
+ * - Copyright(c) 2008 Broadcom Corporation.
+ * - Licenced LGPL 2.1
  *
  * This file is part of FFmpeg.
  *
