@@ -41,7 +41,7 @@
 #include "avcodec.h"
 #include "libavutil/intreadwrite.h"
 
-#define OUTPUT_PROC_TIMEOUT 2000
+#define OUTPUT_PROC_TIMEOUT 50
 
 
 /*****************************************************************************
