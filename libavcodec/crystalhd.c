@@ -445,6 +445,12 @@ static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
     if (interlaced)
         priv->pic.top_field_first = !bottom_first;
 
+    if (output->PicInfo.timeStamp != 0) {
+        priv->pic.reordered_opaque = output->PicInfo.timeStamp / (1000 * 100);
+        av_log(avctx, AV_LOG_VERBOSE, "output \"pts\": %lu\n",
+               priv->pic.reordered_opaque);
+    }
+
     if (!need_second_field) {
         *data_size = sizeof(AVFrame);
         *(AVFrame *)data = priv->pic;
@@ -535,7 +541,19 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
         if (len) {
             int32_t tx_free = (int32_t)DtsTxFreeSize(dev);
             if (len < tx_free - 1024) {
-                uint64_t pts = avpkt->pts == AV_NOPTS_VALUE ? 0 : avpkt->pts;
+                /*
+                 * Despite being notionally opaque, either libcrystalhd or
+                 * the hardware itself will mangle pts values that are too
+                 * small or too large. The docs claim it should be in uints
+                 * of 100ns. Given that we're nominally dealing with a black
+                 * box on both sides, any transform we do has no guarantee of
+                 * avoiding mangling but, empirically, scalling as if the
+                 * reorded_opaque value is in ms seems to work.
+                 */
+                uint64_t pts = avctx->reordered_opaque == AV_NOPTS_VALUE ?
+                               0 : avctx->reordered_opaque * 1000 * 100;
+                av_log(priv->avctx, AV_LOG_VERBOSE, "input \"pts\": %lu\n",
+                       avctx->reordered_opaque);
                 ret = DtsProcInput(dev, avpkt->data, len, pts, 0);
                 if (ret == BC_STS_BUSY) {
                     av_log(avctx, AV_LOG_WARNING,
