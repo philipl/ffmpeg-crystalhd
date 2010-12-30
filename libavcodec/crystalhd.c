@@ -42,11 +42,20 @@
 #include "libavutil/intreadwrite.h"
 
 #define OUTPUT_PROC_TIMEOUT 50
+#define TIMESTAMP_UNIT 10000
 
 
 /*****************************************************************************
  * Module private data
  ****************************************************************************/
+
+typedef struct OpaqueList OpaqueList;
+
+struct OpaqueList {
+   OpaqueList *next;
+   uint64_t fake_timestamp;
+   uint64_t reordered_opaque;
+};
 
 typedef struct CHDContext {
     AVCodecContext *avctx;
@@ -59,6 +68,9 @@ typedef struct CHDContext {
     uint8_t is_nal;
 
     uint64_t last_picture;
+
+    OpaqueList *head;
+    OpaqueList *tail;
 } CHDContext;
 
 
@@ -237,6 +249,68 @@ static inline void *memcpy_pic(void *dst, const void *src,
 
 
 /*****************************************************************************
+ * OpaqueList functions
+ ****************************************************************************/
+
+static uint64_t opaque_list_push(CHDContext *priv, uint64_t reordered_opaque)
+{
+    OpaqueList *newNode = av_mallocz(sizeof (OpaqueList));
+    if (priv->head == NULL) {
+        newNode->fake_timestamp = TIMESTAMP_UNIT;
+        priv->head = newNode;
+    } else {
+        newNode->fake_timestamp = priv->tail->fake_timestamp + TIMESTAMP_UNIT;
+        priv->tail->next = newNode;
+    }
+    priv->tail = newNode;
+    newNode->reordered_opaque = reordered_opaque;
+
+    return newNode->fake_timestamp;
+}
+
+static uint64_t opaque_list_pop(CHDContext *priv, uint64_t fake_timestamp)
+{
+    OpaqueList *node = priv->head;
+
+    if (priv->head == NULL) {
+        av_log(priv->avctx, AV_LOG_ERROR,
+               "CrystalHD: Attempted to query non-existent timestamps.\n");
+        return AV_NOPTS_VALUE;
+    }
+
+    if (priv->head->fake_timestamp == fake_timestamp) {
+        uint64_t reordered_opaque = node->reordered_opaque;
+        priv->head = node->next;
+        av_free(node);
+
+        if (priv->head->next == NULL)
+            priv->tail = priv->head;
+
+        return reordered_opaque;
+    }
+
+    while (node->next) {
+        OpaqueList *next = node->next;
+        if (next->fake_timestamp == fake_timestamp) {
+            uint64_t reordered_opaque = next->reordered_opaque;
+            node->next = node->next->next;
+            av_free(next);
+
+            if (node->next == NULL)
+               priv->tail = node->next;
+
+            return reordered_opaque;
+        }
+        node = node->next;
+    }
+
+    av_log(priv->avctx, AV_LOG_WARNING,
+           "CrystalHD: Couldn't match fake_timestamp.\n");
+    return AV_NOPTS_VALUE;
+}
+
+
+/*****************************************************************************
  * Video decoder API function definitions
  ****************************************************************************/
 
@@ -267,6 +341,15 @@ static av_cold int uninit(AVCodecContext *avctx)
 
     if (priv->pic.data[0])
         avctx->release_buffer(avctx, &priv->pic);
+
+    if (priv->head) {
+       OpaqueList *node = priv->head;
+       while (node) {
+          OpaqueList *next = node->next;
+          av_free(node);
+          node = next;
+       }
+    }
 
     return 0;
 }
@@ -446,8 +529,9 @@ static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
         priv->pic.top_field_first = !bottom_first;
 
     if (output->PicInfo.timeStamp != 0) {
-        priv->pic.reordered_opaque = output->PicInfo.timeStamp / (1000 * 10);
-        av_log(avctx, AV_LOG_VERBOSE, "output \"pts\": %lu\n",
+        priv->pic.reordered_opaque =
+            opaque_list_pop(priv, output->PicInfo.timeStamp);
+        av_log(avctx, AV_LOG_INFO, "output \"pts\": %lu\n",
                priv->pic.reordered_opaque);
     }
 
@@ -550,9 +634,9 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                  * avoiding mangling but, empirically, scalling as if the
                  * reorded_opaque value is in ms seems to work.
                  */
-                uint64_t pts = avctx->reordered_opaque == AV_NOPTS_VALUE ?
-                               0 : avctx->reordered_opaque * 1000 * 10;
-                av_log(priv->avctx, AV_LOG_VERBOSE, "input \"pts\": %lu\n",
+                uint64_t pts = avctx->reordered_opaque == AV_NOPTS_VALUE ? 0 :
+                               opaque_list_push(priv, avctx->reordered_opaque);
+                av_log(priv->avctx, AV_LOG_INFO, "input \"pts\": %lu\n",
                        avctx->reordered_opaque);
                 ret = DtsProcInput(dev, avpkt->data, len, pts, 0);
                 if (ret == BC_STS_BUSY) {
