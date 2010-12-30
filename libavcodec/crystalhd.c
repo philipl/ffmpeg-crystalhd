@@ -446,7 +446,7 @@ static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
         priv->pic.top_field_first = !bottom_first;
 
     if (output->PicInfo.timeStamp != 0) {
-        priv->pic.reordered_opaque = output->PicInfo.timeStamp / (1000 * 100);
+        priv->pic.reordered_opaque = output->PicInfo.timeStamp / (1000 * 10);
         av_log(avctx, AV_LOG_VERBOSE, "output \"pts\": %lu\n",
                priv->pic.reordered_opaque);
     }
@@ -551,7 +551,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                  * reorded_opaque value is in ms seems to work.
                  */
                 uint64_t pts = avctx->reordered_opaque == AV_NOPTS_VALUE ?
-                               0 : avctx->reordered_opaque * 1000 * 100;
+                               0 : avctx->reordered_opaque * 1000 * 10;
                 av_log(priv->avctx, AV_LOG_VERBOSE, "input \"pts\": %lu\n",
                        avctx->reordered_opaque);
                 ret = DtsProcInput(dev, avpkt->data, len, pts, 0);
