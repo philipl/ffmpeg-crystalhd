@@ -42,7 +42,7 @@
 #include "libavutil/intreadwrite.h"
 
 #define OUTPUT_PROC_TIMEOUT 50
-#define TIMESTAMP_UNIT 10000
+#define TIMESTAMP_UNIT 100000
 
 
 /*****************************************************************************
@@ -293,15 +293,16 @@ static uint64_t opaque_list_pop(CHDContext *priv, uint64_t fake_timestamp)
         OpaqueList *next = node->next;
         if (next->fake_timestamp == fake_timestamp) {
             uint64_t reordered_opaque = next->reordered_opaque;
-            node->next = node->next->next;
+            node->next = next->next;
             av_free(next);
 
             if (node->next == NULL)
-               priv->tail = node->next;
+               priv->tail = node;
 
             return reordered_opaque;
+        } else {
+            node = next;
         }
-        node = node->next;
     }
 
     av_log(priv->avctx, AV_LOG_WARNING,
@@ -531,7 +532,7 @@ static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
     if (output->PicInfo.timeStamp != 0) {
         priv->pic.reordered_opaque =
             opaque_list_pop(priv, output->PicInfo.timeStamp);
-        av_log(avctx, AV_LOG_INFO, "output \"pts\": %lu\n",
+        av_log(avctx, AV_LOG_VERBOSE, "output \"pts\": %lu\n",
                priv->pic.reordered_opaque);
     }
 
@@ -636,7 +637,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                  */
                 uint64_t pts = avctx->reordered_opaque == AV_NOPTS_VALUE ? 0 :
                                opaque_list_push(priv, avctx->reordered_opaque);
-                av_log(priv->avctx, AV_LOG_INFO, "input \"pts\": %lu\n",
+                av_log(priv->avctx, AV_LOG_VERBOSE, "input \"pts\": %lu\n",
                        avctx->reordered_opaque);
                 ret = DtsProcInput(dev, avpkt->data, len, pts, 0);
                 if (ret == BC_STS_BUSY) {
