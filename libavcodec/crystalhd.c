@@ -685,16 +685,28 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
 
     rec_ret = receive_frame(avctx, data, data_size);
     if (rec_ret == 0 && *data_size == 0) {
-        ret = DtsGetDriverStatus(dev, &decoder_status);
-        if (ret == BC_STS_SUCCESS && decoder_status.ReadyListCount > 0) {
-            rec_ret = receive_frame(avctx, data, data_size);
-            if (rec_ret == 0 && *data_size > 0) {
-                av_log(avctx, AV_LOG_VERBOSE,
-                       "CrystalHD: Got second field on first call.\n");
+        /*
+         * This case indicates one field of an interlaced frame has been
+         * received. Unless we grab the second field before returning, we'll
+         * slip another frame in the pipeline and if that happens a lot, we're
+         * sunk. So we have to get that second field now.
+         */
+        av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Trying to get second field.\n");
+        while (1) {
+            ret = DtsGetDriverStatus(dev, &decoder_status);
+            if (ret == BC_STS_SUCCESS && decoder_status.ReadyListCount > 0) {
+                rec_ret = receive_frame(avctx, data, data_size);
+                if ((rec_ret == 0 && *data_size > 0) || rec_ret == BC_STS_BUSY)
+                    break;
             }
         }
+        av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Got second field.\n");
     } else if (rec_ret == 1) {
-       receive_frame(avctx, data, data_size);
+        /*
+         * This means we got a FMT_CHANGE event and no frame, so go around
+         * again to get the frame.
+         */
+        receive_frame(avctx, data, data_size);
     }
     return len;
 }
