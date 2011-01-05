@@ -198,9 +198,9 @@ static inline void print_frame_info(CHDContext *priv, BC_DTS_PROC_OUT *output)
            output->YBuffDoneSz);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tUVBuffDoneSz: %u\n",
            output->UVBuffDoneSz);
-    av_log(priv->avctx, AV_LOG_VERBOSE, "\tTimestamp: %lu\n",
+    av_log(priv->avctx, AV_LOG_INFO, "\tTimestamp: %lu\n",
            output->PicInfo.timeStamp);
-    av_log(priv->avctx, AV_LOG_VERBOSE, "\tPicture Number: %u\n",
+    av_log(priv->avctx, AV_LOG_INFO, "\tPicture Number: %u\n",
            output->PicInfo.picture_number);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tWidth: %u\n",
            output->PicInfo.width);
@@ -210,7 +210,7 @@ static inline void print_frame_info(CHDContext *priv, BC_DTS_PROC_OUT *output)
            output->PicInfo.chroma_format);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tPulldown: %u\n",
            output->PicInfo.pulldown);
-    av_log(priv->avctx, AV_LOG_VERBOSE, "\tFlags: 0x%08x\n",
+    av_log(priv->avctx, AV_LOG_INFO, "\tFlags: 0x%08x\n",
            output->PicInfo.flags);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tFrame Rate/Res: %u\n",
            output->PicInfo.frame_rate);
@@ -586,7 +586,7 @@ static inline int receive_frame(AVCodecContext *avctx,
             if (*data_size > 0) {
                 avctx->has_b_frames--;
                 priv->last_picture++;
-                av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Pipeline length: %u\n",
+                av_log(avctx, AV_LOG_INFO, "CrystalHD: Pipeline length: %u\n",
                        avctx->has_b_frames);
             }
         } else {
@@ -635,10 +635,9 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                  * avoiding mangling but, empirically, scalling as if the
                  * reorded_opaque value is in ms seems to work.
                  */
-                uint64_t pts = avctx->reordered_opaque == AV_NOPTS_VALUE ? 0 :
-                               opaque_list_push(priv, avctx->reordered_opaque);
+                uint64_t pts = opaque_list_push(priv, avctx->reordered_opaque);
                 av_log(priv->avctx, AV_LOG_VERBOSE, "input \"pts\": %lu\n",
-                       avctx->reordered_opaque);
+                       pts);
                 ret = DtsProcInput(dev, avpkt->data, len, pts, 0);
                 if (ret == BC_STS_BUSY) {
                     av_log(avctx, AV_LOG_WARNING,
@@ -678,7 +677,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
         }
     } while (input_full == 1);
     if (decoder_status.ReadyListCount == 0) {
-        av_log(avctx, AV_LOG_VERBOSE,
+        av_log(avctx, AV_LOG_INFO,
                "CrystalHD: No frames ready. Returning\n");
         return 0;
     }
