@@ -66,6 +66,7 @@ typedef struct CHDContext {
     uint32_t sps_pps_size;
     uint8_t nal_length_size;
     uint8_t is_nal;
+    uint8_t skip_next_output;
 
     uint64_t last_picture;
 
@@ -321,6 +322,7 @@ static void flush(AVCodecContext *avctx)
 
     avctx->has_b_frames = 0;
     priv->last_picture = 2;
+    priv->skip_next_output = 0;
     DtsFlushInput(priv->dev, 4);
 }
 
@@ -562,6 +564,15 @@ static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
         *(AVFrame *)data = priv->pic;
     }
 
+    /*
+     * There's no way to detect this case right now. You have to break
+     * normal MBAFF and/or PAFF handling to do it.
+     */
+    if (0) {
+        av_log(priv->avctx, AV_LOG_VERBOSE, "Fieldpair from two packets.\n");
+        return 2;
+    }
+
     return 0;
 }
 
@@ -704,6 +715,13 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
         return 0;
     }
 
+    if (priv->skip_next_output) {
+        av_log(avctx, AV_LOG_VERBOSE,
+               "CrystalHD: Skipping next output.\n");
+        priv->skip_next_output = 0;
+        return avpkt->size;
+    }
+
     rec_ret = receive_frame(avctx, data, data_size, 0);
     if (rec_ret == 0 && *data_size == 0) {
         /*
@@ -741,6 +759,12 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
             }
             av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Got second field.\n");
         }
+    } else if (rec_ret == 2) {
+        /*
+         * Two input packets got turned into a field pair. Gawd.
+         */
+        av_log(avctx, AV_LOG_VERBOSE, "Don't output on next decode call.\n");
+        priv->skip_next_output = 1;
     } else if (rec_ret == 1) {
         /*
          * This means we got a FMT_CHANGE event and no frame, so go around
