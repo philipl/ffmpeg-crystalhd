@@ -712,7 +712,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
     if (decoder_status.ReadyListCount == 0) {
         av_log(avctx, AV_LOG_INFO,
                "CrystalHD: No frames ready. Returning\n");
-        return 0;
+        return avpkt->size;
     }
 
     if (priv->skip_next_output) {
@@ -772,7 +772,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
          */
         receive_frame(avctx, data, data_size, 0);
     }
-    return len;
+    return avpkt->size;
 }
 
 
