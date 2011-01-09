@@ -472,24 +472,45 @@ static av_cold int init(AVCodecContext *avctx)
 
 
 static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
-                             void *data, int *data_size)
+                             void *data, int *data_size, uint8_t second_field)
 {
+    BC_STATUS ret;
+    BC_DTS_STATUS decoder_status;
+    uint8_t next_frame_same;
+    uint8_t interlaced;
+    uint8_t need_second_field;
+
     CHDContext *priv = avctx->priv_data;
 
-    uint8_t interlaced =  (output->PicInfo.flags & VDEC_FLAG_INTERLACED_SRC) &&
-                         !(output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC);
     uint8_t bottom_field = (output->PicInfo.flags & VDEC_FLAG_BOTTOMFIELD) ==
                            VDEC_FLAG_BOTTOMFIELD;
     uint8_t bottom_first = output->PicInfo.flags & VDEC_FLAG_BOTTOM_FIRST;
-    uint8_t need_second_field = interlaced &&
-                                ((!bottom_field && !bottom_first) ||
-                                 (bottom_field && bottom_first));
 
     int width = output->PicInfo.width * 2; // 16bits per pixel
     int height = output->PicInfo.height;
     uint8_t *src = output->Ybuff;
     uint8_t *dst;
     int dStride;
+
+    ret = DtsGetDriverStatus(priv->dev, &decoder_status);
+    if (ret != BC_STS_SUCCESS) {
+        av_log(avctx, AV_LOG_ERROR,
+               "CrystalHD: GetDriverStatus failed: %u\n", ret);
+       return -1;
+    }
+
+    next_frame_same = output->PicInfo.picture_number ==
+                       (decoder_status.picNumFlags & ~0x40000000);
+    interlaced = ((output->PicInfo.flags & VDEC_FLAG_INTERLACED_SRC) &&
+                  !(output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC)) ||
+                 next_frame_same || bottom_field || second_field;
+    need_second_field = interlaced &&
+                        ((!bottom_field && !bottom_first) ||
+                         (bottom_field && bottom_first));
+
+    av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: next_frame_same: %u | %u | %u\n",
+           next_frame_same, output->PicInfo.picture_number,
+           decoder_status.picNumFlags & ~0x40000000);
 
     priv->pic.buffer_hints = FF_BUFFER_HINTS_VALID | FF_BUFFER_HINTS_PRESERVE |
                              FF_BUFFER_HINTS_REUSABLE;
@@ -546,7 +567,8 @@ static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
 
 
 static inline int receive_frame(AVCodecContext *avctx,
-                                void *data, int *data_size)
+                                void *data, int *data_size,
+                                uint8_t second_field)
 {
     BC_STATUS ret;
     BC_DTS_PROC_OUT output;
@@ -582,7 +604,7 @@ static inline int receive_frame(AVCodecContext *avctx,
                  */
             }
 
-            copy_ret = copy_frame(avctx, &output, data, data_size);
+            copy_ret = copy_frame(avctx, &output, data, data_size, second_field);
             if (*data_size > 0) {
                 avctx->has_b_frames--;
                 priv->last_picture++;
@@ -682,7 +704,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
         return 0;
     }
 
-    rec_ret = receive_frame(avctx, data, data_size);
+    rec_ret = receive_frame(avctx, data, data_size, 0);
     if (rec_ret == 0 && *data_size == 0) {
         /*
          * This case indicates one field of an interlaced frame has been
@@ -694,7 +716,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
         while (1) {
             ret = DtsGetDriverStatus(dev, &decoder_status);
             if (ret == BC_STS_SUCCESS && decoder_status.ReadyListCount > 0) {
-                rec_ret = receive_frame(avctx, data, data_size);
+                rec_ret = receive_frame(avctx, data, data_size, 1);
                 if ((rec_ret == 0 && *data_size > 0) || rec_ret == BC_STS_BUSY)
                     break;
             }
@@ -705,7 +727,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
          * This means we got a FMT_CHANGE event and no frame, so go around
          * again to get the frame.
          */
-        receive_frame(avctx, data, data_size);
+        receive_frame(avctx, data, data_size, 0);
     }
     return len;
 }
