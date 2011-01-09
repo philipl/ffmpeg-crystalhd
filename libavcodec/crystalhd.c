@@ -707,21 +707,40 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
     rec_ret = receive_frame(avctx, data, data_size, 0);
     if (rec_ret == 0 && *data_size == 0) {
         /*
-         * This case indicates one field of an interlaced frame has been
-         * received. Unless we grab the second field before returning, we'll
-         * slip another frame in the pipeline and if that happens a lot, we're
-         * sunk. So we have to get that second field now.
+         * XXX: There's more than just mpeg2 vs h.264 interlaced content, and
+         * I don't know which category each of those will fall in to.
          */
-        av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Trying to get second field.\n");
-        while (1) {
-            ret = DtsGetDriverStatus(dev, &decoder_status);
-            if (ret == BC_STS_SUCCESS && decoder_status.ReadyListCount > 0) {
-                rec_ret = receive_frame(avctx, data, data_size, 1);
-                if ((rec_ret == 0 && *data_size > 0) || rec_ret == BC_STS_BUSY)
-                    break;
+        if (avctx->codec->id == CODEC_ID_H264) {
+            /*
+             * This case is for when the encoded fields are stored separately
+             * and we get a separate avpkt for each one. To keep the pipeline
+             * stable, we should return nothing and wait for the next time
+             * round to grab the second field.
+             * H.264 PAFF is an example of this.
+             */
+            av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Returning after first field.\n");
+            avctx->has_b_frames--;
+        } else {
+            /*
+             * This case is for when the encoded fields are stored in a single
+             * avpkt but the hardware returns then separately. Unless we grab
+             * the second field before returning, we'll slip another frame in
+             * the pipeline and if that happens a lot, we're sunk. So we have
+             * to get that second field now.
+             * Interlaced mpeg2 is an example of this.
+             */
+            av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Trying to get second field.\n");
+            while (1) {
+                ret = DtsGetDriverStatus(dev, &decoder_status);
+                if (ret == BC_STS_SUCCESS && decoder_status.ReadyListCount > 0) {
+                    rec_ret = receive_frame(avctx, data, data_size, 1);
+                    if ((rec_ret == 0 && *data_size > 0) || rec_ret == BC_STS_BUSY)
+                        break;
+                }
+                usleep(10000);
             }
+            av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Got second field.\n");
         }
-        av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Got second field.\n");
     } else if (rec_ret == 1) {
         /*
          * This means we got a FMT_CHANGE event and no frame, so go around
