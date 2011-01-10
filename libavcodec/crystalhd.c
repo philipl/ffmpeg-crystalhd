@@ -199,9 +199,9 @@ static inline void print_frame_info(CHDContext *priv, BC_DTS_PROC_OUT *output)
            output->YBuffDoneSz);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tUVBuffDoneSz: %u\n",
            output->UVBuffDoneSz);
-    av_log(priv->avctx, AV_LOG_INFO, "\tTimestamp: %lu\n",
+    av_log(priv->avctx, AV_LOG_VERBOSE, "\tTimestamp: %lu\n",
            output->PicInfo.timeStamp);
-    av_log(priv->avctx, AV_LOG_INFO, "\tPicture Number: %u\n",
+    av_log(priv->avctx, AV_LOG_VERBOSE, "\tPicture Number: %u\n",
            output->PicInfo.picture_number);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tWidth: %u\n",
            output->PicInfo.width);
@@ -211,7 +211,7 @@ static inline void print_frame_info(CHDContext *priv, BC_DTS_PROC_OUT *output)
            output->PicInfo.chroma_format);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tPulldown: %u\n",
            output->PicInfo.pulldown);
-    av_log(priv->avctx, AV_LOG_INFO, "\tFlags: 0x%08x\n",
+    av_log(priv->avctx, AV_LOG_VERBOSE, "\tFlags: 0x%08x\n",
            output->PicInfo.flags);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tFrame Rate/Res: %u\n",
            output->PicInfo.frame_rate);
@@ -306,7 +306,7 @@ static uint64_t opaque_list_pop(CHDContext *priv, uint64_t fake_timestamp)
         }
     }
 
-    av_log(priv->avctx, AV_LOG_WARNING,
+    av_log(priv->avctx, AV_LOG_VERBOSE,
            "CrystalHD: Couldn't match fake_timestamp.\n");
     return AV_NOPTS_VALUE;
 }
@@ -619,7 +619,7 @@ static inline int receive_frame(AVCodecContext *avctx,
             if (*data_size > 0) {
                 avctx->has_b_frames--;
                 priv->last_picture++;
-                av_log(avctx, AV_LOG_INFO, "CrystalHD: Pipeline length: %u\n",
+                av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Pipeline length: %u\n",
                        avctx->has_b_frames);
             }
         } else {
