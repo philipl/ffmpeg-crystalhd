@@ -37,6 +37,10 @@
 #define ARG_GUID(g) \
     g[0],g[1],g[2],g[3],g[4],g[5],g[6],g[7],g[8],g[9],g[10],g[11],g[12],g[13],g[14],g[15]
 
+typedef struct {
+    int seen_data;
+} WtvStream;
+
 typedef struct WtvContext {
     uint64_t pts;
 } WtvContext;
@@ -75,6 +79,8 @@ static const ff_asf_guid data_guid =
     {0x95,0xC3,0xD2,0xC2,0x7E,0x9A,0xDA,0x11,0x8B,0xF7,0x00,0x07,0xE9,0x5E,0xAD,0x8D};
 static const ff_asf_guid stream_guid =
     {0xED,0xA4,0x13,0x23,0x2D,0xBF,0x4F,0x45,0xAD,0x8A,0xD9,0x5B,0xA7,0xF9,0x1F,0xEE};
+static const ff_asf_guid stream2_guid =
+    {0xA2,0xC3,0xD2,0xC2,0x7E,0x9A,0xDA,0x11,0x8B,0xF7,0x00,0x07,0xE9,0x5E,0xAD,0x8D};
 static const ff_asf_guid EVENTID_SubtitleSpanningEvent =
     {0x48,0xC0,0xCE,0x5D,0xB9,0xD0,0x63,0x41,0x87,0x2C,0x4F,0x32,0x22,0x3B,0xE8,0x8A};
 static const ff_asf_guid EVENTID_LanguageSpanningEvent =
@@ -85,6 +91,8 @@ static const ff_asf_guid EVENTID_CtxADescriptorSpanningEvent =
     {0xE6,0xA2,0xB4,0x3A,0x47,0x42,0x34,0x4B,0x89,0x6C,0x30,0xAF,0xA5,0xD2,0x1C,0x24};
 static const ff_asf_guid EVENTID_CSDescriptorSpanningEvent =
     {0xD9,0x79,0xE7,0xEf,0xF0,0x97,0x86,0x47,0x80,0x0D,0x95,0xCF,0x50,0x5D,0xDC,0x66};
+static const ff_asf_guid EVENTID_DVBScramblingControlSpanningEvent =
+    {0xC4,0xE1,0xD4,0x4B,0xA1,0x90,0x09,0x41,0x82,0x36,0x27,0xF0,0x0E,0x7D,0xCC,0x5B};
 static const ff_asf_guid EVENTID_StreamIDSpanningEvent =
     {0x68,0xAB,0xF1,0xCA,0x53,0xE1,0x41,0x4D,0xA6,0xB3,0xA7,0xC9,0x98,0xDB,0x75,0xEE};
 static const ff_asf_guid EVENTID_TeletextSpanningEvent =
@@ -190,11 +198,27 @@ static void parse_mpeg1waveformatex(AVStream *st)
     }
 }
 
-static AVStream * new_stream(AVFormatContext *s, int sid, int codec_type)
+/**
+ * Initialise stream
+ * @param st Stream to initialise, or NULL to create and initialise new stream
+ * @return NULL on error
+ */
+static AVStream * new_stream(AVFormatContext *s, AVStream *st, int sid, int codec_type)
 {
-    AVStream * st = av_new_stream(s, sid);
-    if (!st)
-        return NULL;
+    if (st) {
+        if (st->codec->extradata) {
+            av_freep(&st->codec->extradata);
+            st->codec->extradata_size = 0;
+        }
+    } else {
+        WtvStream *wst = av_mallocz(sizeof(WtvStream));
+        if (!wst)
+            return NULL;
+        st = av_new_stream(s, sid);
+        if (!st)
+            return NULL;
+        st->priv_data = wst;
+    }
     st->codec->codec_type = codec_type;
     st->need_parsing      = AVSTREAM_PARSE_FULL;
     av_set_pts_info(st, 64, 1, 10000000);
@@ -202,19 +226,19 @@ static AVStream * new_stream(AVFormatContext *s, int sid, int codec_type)
 }
 
 /**
- * parse Media Type structure and create new streams as required
+ * parse Media Type structure and populate stream
+ * @param st         Stream, or NULL to create new stream
  * @param mediatype  Mediatype GUID
  * @param subtype    Subtype GUID
  * @param formattype Format GUID
  * @param size       Size of format buffer
  * @return NULL on error
  */
-static AVStream * parse_media_type(AVFormatContext *s, int sid,
+static AVStream * parse_media_type(AVFormatContext *s, AVStream *st, int sid,
                                    ff_asf_guid mediatype, ff_asf_guid subtype,
                                    ff_asf_guid formattype, int size)
 {
     ByteIOContext *pb = s->pb;
-    AVStream *st;
     if (!ff_guidcmp(subtype, mediasubtype_cpfilters_processed) &&
         !ff_guidcmp(formattype, format_cpfilters_processed)) {
         ff_asf_guid actual_subtype;
@@ -231,11 +255,11 @@ static AVStream * parse_media_type(AVFormatContext *s, int sid,
         ff_get_guid(pb, &actual_formattype);
         url_fseek(pb, -size, SEEK_CUR);
 
-        st = parse_media_type(s, sid, mediatype, actual_subtype, actual_formattype, size - 32);
+        st = parse_media_type(s, st, sid, mediatype, actual_subtype, actual_formattype, size - 32);
         url_fskip(pb, 32);
         return st;
     } else if (!ff_guidcmp(mediatype, mediatype_audio)) {
-        st = new_stream(s, sid, AVMEDIA_TYPE_AUDIO);
+        st = new_stream(s, st, sid, AVMEDIA_TYPE_AUDIO);
         if (!st)
             return NULL;
         if (!ff_guidcmp(formattype, format_waveformatex)) {
@@ -260,7 +284,7 @@ static AVStream * parse_media_type(AVFormatContext *s, int sid,
         }
         return st;
     } else if (!ff_guidcmp(mediatype, mediatype_video)) {
-        st = new_stream(s, sid, AVMEDIA_TYPE_VIDEO);
+        st = new_stream(s, st, sid, AVMEDIA_TYPE_VIDEO);
         if (!st)
             return NULL;
         if (!ff_guidcmp(formattype, format_videoinfo2)) {
@@ -285,7 +309,7 @@ static AVStream * parse_media_type(AVFormatContext *s, int sid,
         return st;
     } else if (!ff_guidcmp(mediatype, mediatype_mpeg2_pes) &&
                !ff_guidcmp(subtype, mediasubtype_dvb_subtitle)) {
-        st = new_stream(s, sid, AVMEDIA_TYPE_SUBTITLE);
+        st = new_stream(s, st, sid, AVMEDIA_TYPE_SUBTITLE);
         if (!st)
             return NULL;
         if (ff_guidcmp(formattype, format_none))
@@ -295,7 +319,7 @@ static AVStream * parse_media_type(AVFormatContext *s, int sid,
         return st;
     } else if (!ff_guidcmp(mediatype, mediatype_mstvcaption) &&
                (!ff_guidcmp(subtype, mediasubtype_teletext) || !ff_guidcmp(subtype, mediasubtype_dtvccdata))) {
-        st = new_stream(s, sid, AVMEDIA_TYPE_SUBTITLE);
+        st = new_stream(s, st, sid, AVMEDIA_TYPE_SUBTITLE);
         if (!st)
             return NULL;
         if (ff_guidcmp(formattype, format_none))
@@ -347,6 +371,8 @@ static int parse_chunks(AVFormatContext *s, int mode, int64_t seekts, int *len_p
             return AVERROR_EOF;
 
         len = get_le32(pb);
+        if (len < 32)
+            break;
         sid = get_le32(pb) & 0x7FFF;
         url_fskip(pb, 8);
         consumed = 32;
@@ -364,9 +390,23 @@ static int parse_chunks(AVFormatContext *s, int mode, int64_t seekts, int *len_p
                     url_fskip(pb, 12);
                     ff_get_guid(pb, &formattype);
                     size = get_le32(pb);
-                    parse_media_type(s, sid, mediatype, subtype, formattype, size);
+                    parse_media_type(s, 0, sid, mediatype, subtype, formattype, size);
                     consumed += 72 + size;
                 }
+            }
+        } else if (!ff_guidcmp(g, stream2_guid)) {
+            int stream_index = ff_find_stream_index(s, sid);
+            if (stream_index >= 0 && !((WtvStream*)s->streams[stream_index]->priv_data)->seen_data) {
+                ff_asf_guid mediatype, subtype, formattype;
+                int size;
+                url_fskip(pb, 12);
+                ff_get_guid(pb, &mediatype);
+                ff_get_guid(pb, &subtype);
+                url_fskip(pb, 12);
+                ff_get_guid(pb, &formattype);
+                size = get_le32(pb);
+                parse_media_type(s, s->streams[stream_index], sid, mediatype, subtype, formattype, size);
+                consumed += 76 + size;
             }
         } else if (!ff_guidcmp(g, EVENTID_AudioDescriptorSpanningEvent) ||
                    !ff_guidcmp(g, EVENTID_CtxADescriptorSpanningEvent) ||
@@ -394,6 +434,14 @@ static int parse_chunks(AVFormatContext *s, int mode, int64_t seekts, int *len_p
                 consumed += buf_size;
                 ff_parse_mpeg2_descriptor(s, st, 0, &pbuf, buf + buf_size, 0, 0, 0, 0);
             }
+        } else if (!ff_guidcmp(g, EVENTID_DVBScramblingControlSpanningEvent)) {
+            int stream_index = ff_find_stream_index(s, sid);
+            if (stream_index >= 0) {
+                url_fskip(pb, 12);
+                if (get_le32(pb))
+                    av_log(s, AV_LOG_WARNING, "DVB scrambled stream detected (st:%d), decoding will likely fail\n", stream_index);
+                consumed += 16;
+            }
         } else if (!ff_guidcmp(g, EVENTID_LanguageSpanningEvent)) {
             int stream_index = ff_find_stream_index(s, sid);
             if (stream_index >= 0) {
@@ -408,19 +456,24 @@ static int parse_chunks(AVFormatContext *s, int mode, int64_t seekts, int *len_p
                 consumed += 15;
             }
         } else if (!ff_guidcmp(g, timestamp_guid)) {
-            url_fskip(pb, 8);
-            wtv->pts = get_le64(pb);
-            consumed += 16;
-            if (wtv->pts == -1)
-                wtv->pts = AV_NOPTS_VALUE;
-            if (mode == SEEK_TO_PTS && wtv->pts >= seekts) {
+            int stream_index = ff_find_stream_index(s, sid);
+            if (stream_index >= 0) {
+                url_fskip(pb, 8);
+                wtv->pts = get_le64(pb);
+                consumed += 16;
+                if (wtv->pts == -1)
+                    wtv->pts = AV_NOPTS_VALUE;
+                if (mode == SEEK_TO_PTS && wtv->pts >= seekts) {
 #define WTV_PAD8(x) (((x) + 7) & ~7)
-                url_fskip(pb, WTV_PAD8(len) - consumed);
-                return 0;
+                    url_fskip(pb, WTV_PAD8(len) - consumed);
+                    return 0;
+                }
             }
         } else if (!ff_guidcmp(g, data_guid)) {
             int stream_index = ff_find_stream_index(s, sid);
             if (mode == SEEK_TO_DATA && stream_index >= 0) {
+                WtvStream *wst = s->streams[stream_index]->priv_data;
+                wst->seen_data = 1;
                 if (len_ptr) {
                     *len_ptr = len;
                 }
@@ -437,7 +490,6 @@ static int parse_chunks(AVFormatContext *s, int mode, int64_t seekts, int *len_p
             !ff_guidcmp(g, /* EVENTID_ChannelChangeSpanningEvent */ (const ff_asf_guid){0xE5,0xC5,0x67,0x90,0x5C,0x4C,0x05,0x42,0x86,0xC8,0x7A,0xFE,0x20,0xFE,0x1E,0xFA}) ||
             !ff_guidcmp(g, /* EVENTID_ChannelInfoSpanningEvent */ (const ff_asf_guid){0x80,0x6D,0xF3,0x41,0x32,0x41,0xC2,0x4C,0xB1,0x21,0x01,0xA4,0x32,0x19,0xD8,0x1B}) ||
             !ff_guidcmp(g, /* EVENTID_ChannelTypeSpanningEvent */ (const ff_asf_guid){0x51,0x1D,0xAB,0x72,0xD2,0x87,0x9B,0x48,0xBA,0x11,0x0E,0x08,0xDC,0x21,0x02,0x43}) ||
-            !ff_guidcmp(g, /* EVENTID_DVBScramblingControlSpanningEvent */ (const ff_asf_guid){0xC4,0xE1,0xD4,0x4B,0xA1,0x90,0x09,0x41,0x82,0x36,0x27,0xF0,0x0E,0x7D,0xCC,0x5B}) ||
             !ff_guidcmp(g, /* EVENTID_PIDListSpanningEvent */ (const ff_asf_guid){0x65,0x8F,0xFC,0x47,0xBB,0xE2,0x34,0x46,0x9C,0xEF,0xFD,0xBF,0xE6,0x26,0x1D,0x5C}) ||
             !ff_guidcmp(g, /* EVENTID_SignalAndServiceStatusSpanningEvent */ (const ff_asf_guid){0xCB,0xC5,0x68,0x80,0x04,0x3C,0x2B,0x49,0xB4,0x7D,0x03,0x08,0x82,0x0D,0xCE,0x51}) ||
             !ff_guidcmp(g, /* EVENTID_StreamTypeSpanningEvent */ (const ff_asf_guid){0xBC,0x2E,0xAF,0x82,0xA6,0x30,0x64,0x42,0xA8,0x0B,0xAD,0x2E,0x13,0x72,0xAC,0x60}) ||
@@ -448,11 +500,10 @@ static int parse_chunks(AVFormatContext *s, int mode, int64_t seekts, int *len_p
             !ff_guidcmp(g, (const ff_asf_guid){0x70,0xE9,0xF1,0xF8,0x89,0xA4,0x4C,0x4D,0x83,0x73,0xB8,0x12,0xE0,0xD5,0xF8,0x1E}) ||
             !ff_guidcmp(g, (const ff_asf_guid){0x96,0xC3,0xD2,0xC2,0x7E,0x9A,0xDA,0x11,0x8B,0xF7,0x00,0x07,0xE9,0x5E,0xAD,0x8D}) ||
             !ff_guidcmp(g, (const ff_asf_guid){0x97,0xC3,0xD2,0xC2,0x7E,0x9A,0xDA,0x11,0x8B,0xF7,0x00,0x07,0xE9,0x5E,0xAD,0x8D}) ||
-            !ff_guidcmp(g, (const ff_asf_guid){0xA1,0xC3,0xD2,0xC2,0x7E,0x9A,0xDA,0x11,0x8B,0xF7,0x00,0x07,0xE9,0x5E,0xAD,0x8D}) ||
-            !ff_guidcmp(g, (const ff_asf_guid){0xA2,0xC3,0xD2,0xC2,0x7E,0x9A,0xDA,0x11,0x8B,0xF7,0x00,0x07,0xE9,0x5E,0xAD,0x8D})) {
+            !ff_guidcmp(g, (const ff_asf_guid){0xA1,0xC3,0xD2,0xC2,0x7E,0x9A,0xDA,0x11,0x8B,0xF7,0x00,0x07,0xE9,0x5E,0xAD,0x8D})) {
             //ignore known guids
         } else
-            av_log(s, AV_LOG_WARNING, "unsuported chunk:"PRI_GUID"\n", ARG_GUID(g));
+            av_log(s, AV_LOG_WARNING, "unsupported chunk:"PRI_GUID"\n", ARG_GUID(g));
 
         url_fskip(pb, WTV_PAD8(len) - consumed);
     }

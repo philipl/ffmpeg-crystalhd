@@ -628,15 +628,18 @@ static void choose_pixel_fmt(AVStream *st, AVCodec *codec)
 {
     if(codec && codec->pix_fmts){
         const enum PixelFormat *p= codec->pix_fmts;
+        if(st->codec->strict_std_compliance <= FF_COMPLIANCE_UNOFFICIAL){
+            if(st->codec->codec_id==CODEC_ID_MJPEG){
+                p= (const enum PixelFormat[]){PIX_FMT_YUVJ420P, PIX_FMT_YUVJ422P, PIX_FMT_YUV420P, PIX_FMT_YUV422P, PIX_FMT_NONE};
+            }else if(st->codec->codec_id==CODEC_ID_LJPEG){
+                p= (const enum PixelFormat[]){PIX_FMT_YUVJ420P, PIX_FMT_YUVJ422P, PIX_FMT_YUVJ444P, PIX_FMT_YUV420P, PIX_FMT_YUV422P, PIX_FMT_YUV444P, PIX_FMT_BGRA, PIX_FMT_NONE};
+            }
+        }
         for(; *p!=-1; p++){
             if(*p == st->codec->pix_fmt)
                 break;
         }
-        if(*p == -1
-           && !(   st->codec->codec_id==CODEC_ID_MJPEG
-                && st->codec->strict_std_compliance <= FF_COMPLIANCE_UNOFFICIAL
-                && (   st->codec->pix_fmt == PIX_FMT_YUV420P
-                    || st->codec->pix_fmt == PIX_FMT_YUV422P)))
+        if(*p == -1)
             st->codec->pix_fmt = codec->pix_fmts[0];
     }
 }
@@ -3271,6 +3274,8 @@ static void opt_input_file(const char *filename)
                 dec->flags |= CODEC_FLAG_EMU_EDGE;
                 frame_height >>= dec->lowres;
                 frame_width  >>= dec->lowres;
+                dec->height = frame_height;
+                dec->width  = frame_width;
             }
             if(me_threshold)
                 dec->debug |= FF_DEBUG_MV;
@@ -3904,6 +3909,7 @@ static void show_usage(void)
 static void show_help(void)
 {
     AVCodec *c;
+    AVOutputFormat *oformat = NULL;
 
     av_log_set_callback(log_callback_help);
     show_usage();
@@ -3945,6 +3951,15 @@ static void show_help(void)
 
     av_opt_show2(avformat_opts, NULL, AV_OPT_FLAG_ENCODING_PARAM|AV_OPT_FLAG_DECODING_PARAM, 0);
     printf("\n");
+
+    /* individual muxer options */
+    while ((oformat = av_oformat_next(oformat))) {
+        if (oformat->priv_class) {
+            av_opt_show2(&oformat->priv_class, NULL, AV_OPT_FLAG_ENCODING_PARAM, 0);
+            printf("\n");
+        }
+    }
+
     av_opt_show2(sws_opts, NULL, AV_OPT_FLAG_ENCODING_PARAM|AV_OPT_FLAG_DECODING_PARAM, 0);
 }
 

@@ -344,6 +344,8 @@ int avcodec_default_get_buffer(AVCodecContext *s, AVFrame *pic){
     }
     s->internal_buffer_count++;
 
+    if(s->pkt) pic->pkt_pts= s->pkt->pts;
+    else       pic->pkt_pts= AV_NOPTS_VALUE;
     pic->reordered_opaque= s->reordered_opaque;
 
     if(s->debug&FF_DEBUG_BUFFERS)
@@ -628,11 +630,16 @@ int attribute_align_arg avcodec_decode_video2(AVCodecContext *avctx, AVFrame *pi
     *got_picture_ptr= 0;
     if((avctx->coded_width||avctx->coded_height) && av_image_check_size(avctx->coded_width, avctx->coded_height, 0, avctx))
         return -1;
+
+    avctx->pkt = avpkt;
+
     if((avctx->codec->capabilities & CODEC_CAP_DELAY) || avpkt->size){
         ret = avctx->codec->decode(avctx, picture, got_picture_ptr,
                                 avpkt);
 
         emms_c(); //needed to avoid an emms_c() call before every return;
+
+        picture->pkt_dts= avpkt->dts;
 
         if (*got_picture_ptr)
             avctx->frame_number++;
@@ -661,6 +668,8 @@ int attribute_align_arg avcodec_decode_audio3(AVCodecContext *avctx, int16_t *sa
                          AVPacket *avpkt)
 {
     int ret;
+
+    avctx->pkt = avpkt;
 
     if((avctx->codec->capabilities & CODEC_CAP_DELAY) || avpkt->size){
         //FIXME remove the check below _after_ ensuring that all audio check that the available space is enough
@@ -703,6 +712,7 @@ int avcodec_decode_subtitle2(AVCodecContext *avctx, AVSubtitle *sub,
 {
     int ret;
 
+    avctx->pkt = avpkt;
     *got_sub_ptr = 0;
     ret = avctx->codec->decode(avctx, sub, got_sub_ptr, avpkt);
     if (*got_sub_ptr)
@@ -861,6 +871,7 @@ size_t av_get_codec_tag_string(char *buf, size_t buf_size, unsigned int codec_ta
 void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
 {
     const char *codec_name;
+    const char *profile = NULL;
     AVCodec *p;
     char buf1[32];
     int bitrate;
@@ -873,6 +884,7 @@ void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
 
     if (p) {
         codec_name = p->name;
+        profile = av_get_profile_name(p, enc->profile);
     } else if (enc->codec_id == CODEC_ID_MPEG2TS) {
         /* fake mpeg2 transport stream codec (currently not
            registered) */
@@ -892,6 +904,9 @@ void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
         snprintf(buf, buf_size,
                  "Video: %s%s",
                  codec_name, enc->mb_decision ? " (hq)" : "");
+        if (profile)
+            snprintf(buf + strlen(buf), buf_size - strlen(buf),
+                     " (%s)", profile);
         if (enc->pix_fmt != PIX_FMT_NONE) {
             snprintf(buf + strlen(buf), buf_size - strlen(buf),
                      ", %s",
@@ -927,6 +942,9 @@ void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
         snprintf(buf, buf_size,
                  "Audio: %s",
                  codec_name);
+        if (profile)
+            snprintf(buf + strlen(buf), buf_size - strlen(buf),
+                     " (%s)", profile);
         if (enc->sample_rate) {
             snprintf(buf + strlen(buf), buf_size - strlen(buf),
                      ", %d Hz", enc->sample_rate);
@@ -964,6 +982,19 @@ void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
         snprintf(buf + strlen(buf), buf_size - strlen(buf),
                  ", %d kb/s", bitrate / 1000);
     }
+}
+
+const char *av_get_profile_name(const AVCodec *codec, int profile)
+{
+    const AVProfile *p;
+    if (profile == FF_PROFILE_UNKNOWN || !codec->profiles)
+        return NULL;
+
+    for (p = codec->profiles; p->profile != FF_PROFILE_UNKNOWN; p++)
+        if (p->profile == profile)
+            return p->name;
+
+    return NULL;
 }
 
 unsigned avcodec_version( void )

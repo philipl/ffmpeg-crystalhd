@@ -300,11 +300,6 @@ static av_cold int decode_init(AVCodecContext *avctx)
     s->packet_loss = 1;
     s->len_prefix  = (s->decode_flags & 0x40);
 
-    if (!s->len_prefix) {
-        av_log_ask_for_sample(avctx, "no length prefix\n");
-        return AVERROR_INVALIDDATA;
-    }
-
     /** get frame len */
     s->samples_per_frame = 1 << ff_wma_get_frame_len_bits(avctx->sample_rate,
                                                           3, s->decode_flags);
@@ -316,7 +311,7 @@ static av_cold int decode_init(AVCodecContext *avctx)
     /** subframe info */
     log2_max_num_subframes       = ((s->decode_flags & 0x38) >> 3);
     s->max_num_subframes         = 1 << log2_max_num_subframes;
-    if (s->max_num_subframes == 16)
+    if (s->max_num_subframes == 16 || s->max_num_subframes == 4)
         s->max_subframe_len_bit = 1;
     s->subframe_len_bits = av_log2(log2_max_num_subframes) + 1;
 
@@ -1295,9 +1290,10 @@ static int decode_frame(WMAProDecodeCtx *s)
 
     /** read postproc transform */
     if (s->num_channels > 1 && get_bits1(gb)) {
-        av_log_ask_for_sample(s->avctx, "Unsupported postproc transform found\n");
-        s->packet_loss = 1;
-        return 0;
+        if (get_bits1(gb)) {
+            for (i = 0; i < s->num_channels * s->num_channels; i++)
+                skip_bits(gb, 4);
+        }
     }
 
     /** read drc info */
@@ -1368,16 +1364,22 @@ static int decode_frame(WMAProDecodeCtx *s)
     } else
         s->samples += s->num_channels * s->samples_per_frame;
 
-    if (len != (get_bits_count(gb) - s->frame_offset) + 2) {
-        /** FIXME: not sure if this is always an error */
-        av_log(s->avctx, AV_LOG_ERROR, "frame[%i] would have to skip %i bits\n",
-               s->frame_num, len - (get_bits_count(gb) - s->frame_offset) - 1);
-        s->packet_loss = 1;
-        return 0;
-    }
+    if (s->len_prefix) {
+        if (len != (get_bits_count(gb) - s->frame_offset) + 2) {
+            /** FIXME: not sure if this is always an error */
+            av_log(s->avctx, AV_LOG_ERROR,
+                   "frame[%i] would have to skip %i bits\n", s->frame_num,
+                   len - (get_bits_count(gb) - s->frame_offset) - 1);
+            s->packet_loss = 1;
+            return 0;
+        }
 
-    /** skip the rest of the frame data */
-    skip_bits_long(gb, len - (get_bits_count(gb) - s->frame_offset) - 1);
+        /** skip the rest of the frame data */
+        skip_bits_long(gb, len - (get_bits_count(gb) - s->frame_offset) - 1);
+    } else {
+        while (get_bits_count(gb) < s->num_saved_bits && get_bits1(gb) == 0) {
+        }
+    }
 
     /** decode trailer bit */
     more_frames = get_bits1(gb);
@@ -1515,17 +1517,33 @@ static int decode_packet(AVCodecContext *avctx,
                     s->num_saved_bits - s->frame_offset);
         }
 
-        s->packet_loss = 0;
+        if (s->packet_loss) {
+            /** reset number of saved bits so that the decoder
+                does not start to decode incomplete frames in the
+                s->len_prefix == 0 case */
+            s->num_saved_bits = 0;
+            s->packet_loss = 0;
+        }
 
     } else {
         int frame_size;
         s->buf_bit_size = avpkt->size << 3;
         init_get_bits(gb, avpkt->data, s->buf_bit_size);
         skip_bits(gb, s->packet_offset);
-        if (remaining_bits(s, gb) > s->log2_frame_size &&
+        if (s->len_prefix && remaining_bits(s, gb) > s->log2_frame_size &&
             (frame_size = show_bits(gb, s->log2_frame_size)) &&
             frame_size <= remaining_bits(s, gb)) {
             save_bits(s, gb, frame_size, 0);
+            s->packet_done = !decode_frame(s);
+        } else if (!s->len_prefix
+                   && s->num_saved_bits > get_bits_count(&s->gb)) {
+            /** when the frames do not have a length prefix, we don't know
+                the compressed length of the individual frames
+                however, we know what part of a new packet belongs to the
+                previous frame
+                therefore we save the incoming packet first, then we append
+                the "previous frame" data from the next packet so that
+                we get a buffer that only contains full frames */
             s->packet_done = !decode_frame(s);
         } else
             s->packet_done = 1;

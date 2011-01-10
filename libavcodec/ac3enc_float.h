@@ -1,6 +1,8 @@
 /*
- * AC-3 and E-AC-3 decoder tables
- * Copyright (c) 2007 Bartlomiej Wolowiec <bartek.wolowiec@gmail.com>
+ * The simplest AC-3 encoder
+ * Copyright (c) 2000 Fabrice Bellard
+ * Copyright (c) 2006-2010 Justin Ruggles <justin.ruggles@gmail.com>
+ * Copyright (c) 2006-2010 Prakash Punnoor <prakash@punnoor.de>
  *
  * This file is part of FFmpeg.
  *
@@ -19,15 +21,25 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef AVCODEC_AC3DEC_DATA_H
-#define AVCODEC_AC3DEC_DATA_H
+/**
+ * @file
+ * floating-point AC-3 encoder header.
+ */
 
-#include <stdint.h>
+#ifndef AVCODEC_AC3ENC_FLOAT_H
+#define AVCODEC_AC3ENC_FLOAT_H
 
-extern const uint8_t ff_ac3_ungroup_3_in_5_bits_tab[32][3];
+#include "fft.h"
 
-extern const uint8_t ff_eac3_hebap_tab[64];
-extern const uint8_t ff_eac3_default_cpl_band_struct[18];
-extern const uint8_t ff_eac3_default_spx_band_struct[17];
 
-#endif /* AVCODEC_AC3DEC_DATA_H */
+typedef float SampleType;
+typedef float CoefType;
+typedef float CoefSumType;
+
+
+typedef struct AC3MDCTContext {
+    const float *window;    ///< MDCT window function
+    FFTContext fft;         ///< FFT context for MDCT calculation
+} AC3MDCTContext;
+
+#endif /* AVCODEC_AC3ENC_FLOAT_H */

@@ -257,6 +257,7 @@ const AVCodecTag ff_codec_bmp_tags[] = {
     { CODEC_ID_AURA2,        MKTAG('A', 'U', 'R', '2') },
     { CODEC_ID_DPX,          MKTAG('d', 'p', 'x', ' ') },
     { CODEC_ID_KGV1,         MKTAG('K', 'G', 'V', '1') },
+    { CODEC_ID_LAGARITH,     MKTAG('L', 'A', 'G', 'S') },
     { CODEC_ID_NONE,         0 }
 };
 
@@ -297,6 +298,7 @@ const AVCodecTag ff_codec_wav_tags[] = {
     { CODEC_ID_IMC,             0x0401 },
     { CODEC_ID_GSM_MS,          0x1500 },
     { CODEC_ID_TRUESPEECH,      0x1501 },
+    { CODEC_ID_AAC_LATM,        0x1602 },
     { CODEC_ID_AC3,             0x2000 },
     { CODEC_ID_DTS,             0x2001 },
     { CODEC_ID_SONIC,           0x2048 },
@@ -370,13 +372,11 @@ int ff_put_wav_header(ByteIOContext *pb, AVCodecContext *enc)
         av_log(enc, AV_LOG_WARNING, "requested bits_per_coded_sample (%d) and actually stored (%d) differ\n", enc->bits_per_coded_sample, bps);
     }
 
-    if (enc->codec_id == CODEC_ID_MP2 || enc->codec_id == CODEC_ID_MP3 || enc->codec_id == CODEC_ID_AC3) {
+    if (enc->codec_id == CODEC_ID_MP2 || enc->codec_id == CODEC_ID_MP3) {
         blkalign = enc->frame_size; //this is wrong, but it seems many demuxers do not work if this is set correctly
         //blkalign = 144 * enc->bit_rate/enc->sample_rate;
-        //For high bitrate AC-3, set blkalign to maximum bytes per frame value
-        //to allow playback on WMP and MPlayer
-        if (enc->bit_rate > 384000)
-            blkalign = 3840;
+    } else if (enc->codec_id == CODEC_ID_AC3) {
+            blkalign = 3840; //maximum bytes per frame
     } else if (enc->codec_id == CODEC_ID_ADPCM_G726) { //
         blkalign = 1;
     } else if (enc->block_align != 0) { /* specified by the codec */
@@ -516,6 +516,11 @@ void ff_get_wav_header(ByteIOContext *pb, AVCodecContext *codec, int size)
             url_fskip(pb, size);
     }
     codec->codec_id = ff_wav_codec_get_id(id, codec->bits_per_coded_sample);
+    if (codec->codec_id == CODEC_ID_AAC_LATM) {
+        /* channels and sample_rate values are those prior to applying SBR and/or PS */
+        codec->channels    = 0;
+        codec->sample_rate = 0;
+    }
 }
 
 

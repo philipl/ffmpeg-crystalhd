@@ -812,7 +812,7 @@ static void compute_frame_duration(int *pnum, int *pden, AVStream *st,
         break;
     case AVMEDIA_TYPE_AUDIO:
         frame_size = get_audio_frame_size(st->codec, pkt->size);
-        if (frame_size < 0)
+        if (frame_size <= 0 || st->codec->sample_rate <= 0)
             break;
         *pnum = frame_size;
         *pden = st->codec->sample_rate;
@@ -2544,6 +2544,7 @@ void av_close_input_stream(AVFormatContext *s)
     int i;
     AVStream *st;
 
+    flush_packet_queue(s);
     if (s->iformat->read_close)
         s->iformat->read_close(s);
     for(i=0;i<s->nb_streams;i++) {
@@ -2575,7 +2576,6 @@ void av_close_input_stream(AVFormatContext *s)
         av_freep(&s->programs[i]);
     }
     av_freep(&s->programs);
-    flush_packet_queue(s);
     av_freep(&s->priv_data);
     while(s->nb_chapters--) {
 #if FF_API_OLD_METADATA
@@ -2720,6 +2720,10 @@ int av_set_parameters(AVFormatContext *s, AVFormatParameters *ap)
         s->priv_data = av_mallocz(s->oformat->priv_data_size);
         if (!s->priv_data)
             return AVERROR(ENOMEM);
+        if (s->oformat->priv_class) {
+            *(const AVClass**)s->priv_data= s->oformat->priv_class;
+            av_opt_set_defaults(s->priv_data);
+        }
     } else
         s->priv_data = NULL;
 
