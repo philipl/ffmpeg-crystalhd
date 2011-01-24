@@ -61,9 +61,9 @@ enum CopyRet {
 typedef struct OpaqueList OpaqueList;
 
 struct OpaqueList {
-   OpaqueList *next;
-   uint64_t fake_timestamp;
-   uint64_t reordered_opaque;
+    OpaqueList *next;
+    uint64_t fake_timestamp;
+    uint64_t reordered_opaque;
 };
 
 typedef struct CHDContext {
