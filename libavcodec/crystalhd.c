@@ -615,6 +615,14 @@ static inline CopyRet receive_frame(AVCodecContext *avctx,
     } else if (ret == BC_STS_SUCCESS) {
         int copy_ret = -1;
         if (output.PoutFlags & BC_POUT_FLAGS_PIB_VALID) {
+            if (output.PicInfo.timeStamp == 0) {
+                av_log(avctx, AV_LOG_VERBOSE,
+                       "CrystalHD: Not returning packed frame twice.\n");
+                priv->last_picture++;
+                DtsReleaseOutputBuffs(dev, NULL, FALSE);
+                return RET_COPY_AGAIN;
+            }
+
             print_frame_info(priv, &output);
 
             if (priv->last_picture + 1 < output.PicInfo.picture_number) {
