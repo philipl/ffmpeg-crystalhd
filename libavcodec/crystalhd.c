@@ -791,6 +791,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
          */
         receive_frame(avctx, data, data_size, 0);
     }
+    usleep(10000);
     return avpkt->size;
 }
 
