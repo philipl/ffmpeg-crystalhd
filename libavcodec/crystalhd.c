@@ -49,6 +49,15 @@
  * Module private data
  ****************************************************************************/
 
+typedef enum CopyRet CopyRet;
+
+enum CopyRet {
+    RET_ERROR = -1,
+    RET_OK = 0,
+    RET_COPY_AGAIN = 1,
+    RET_SKIP_NEXT_COPY = 2,
+};
+
 typedef struct OpaqueList OpaqueList;
 
 struct OpaqueList {
@@ -473,8 +482,10 @@ static av_cold int init(AVCodecContext *avctx)
 }
 
 
-static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
-                             void *data, int *data_size, uint8_t second_field)
+static inline CopyRet copy_frame(AVCodecContext *avctx,
+                                 BC_DTS_PROC_OUT *output,
+                                 void *data, int *data_size,
+                                 uint8_t second_field)
 {
     BC_STATUS ret;
     BC_DTS_STATUS decoder_status;
@@ -498,7 +509,7 @@ static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
     if (ret != BC_STS_SUCCESS) {
         av_log(avctx, AV_LOG_ERROR,
                "CrystalHD: GetDriverStatus failed: %u\n", ret);
-       return -1;
+       return RET_ERROR;
     }
 
     next_frame_same = output->PicInfo.picture_number ==
@@ -518,7 +529,7 @@ static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
                              FF_BUFFER_HINTS_REUSABLE;
     if(avctx->reget_buffer(avctx, &priv->pic) < 0) {
         av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
-        return -1;
+        return RET_ERROR;
     }
 
     dStride = priv->pic.linesize[0];
@@ -570,16 +581,16 @@ static inline int copy_frame(AVCodecContext *avctx, BC_DTS_PROC_OUT *output,
      */
     if (0) {
         av_log(priv->avctx, AV_LOG_VERBOSE, "Fieldpair from two packets.\n");
-        return 2;
+        return RET_SKIP_NEXT_COPY;
     }
 
-    return 0;
+    return RET_OK;
 }
 
 
-static inline int receive_frame(AVCodecContext *avctx,
-                                void *data, int *data_size,
-                                uint8_t second_field)
+static inline CopyRet receive_frame(AVCodecContext *avctx,
+                                    void *data, int *data_size,
+                                    uint8_t second_field)
 {
     BC_STATUS ret;
     BC_DTS_PROC_OUT output;
@@ -600,7 +611,7 @@ static inline int receive_frame(AVCodecContext *avctx,
         avctx->height = output.PicInfo.height;
         if (output.PicInfo.height == 1088)
             avctx->height = 1080;
-        return 1;
+        return RET_COPY_AGAIN;
     } else if (ret == BC_STS_SUCCESS) {
         int copy_ret = -1;
         if (output.PoutFlags & BC_POUT_FLAGS_PIB_VALID) {
@@ -629,16 +640,16 @@ static inline int receive_frame(AVCodecContext *avctx,
             av_log(avctx, AV_LOG_ERROR, "CrystalHD: ProcOutput succeeded with "
                                         "invalid PIB\n");
             avctx->has_b_frames--;
-            copy_ret = 0;
+            copy_ret = RET_OK;
         }
         DtsReleaseOutputBuffs(dev, NULL, FALSE);
 
         return copy_ret;
     } else if (ret == BC_STS_BUSY) {
-        return 0;
+        return RET_COPY_AGAIN;
     } else {
         av_log(avctx, AV_LOG_ERROR, "CrystalHD: ProcOutput failed %d\n", ret);
-        return -1;
+        return RET_ERROR;
     }
 }
 
@@ -651,7 +662,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
     HANDLE dev = priv->dev;
     uint8_t input_full = 0;
     int len = avpkt->size;
-    int rec_ret;
+    CopyRet rec_ret;
 
     av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: decode_frame\n");
 
@@ -759,13 +770,13 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
             }
             av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Got second field.\n");
         }
-    } else if (rec_ret == 2) {
+    } else if (rec_ret == RET_SKIP_NEXT_COPY) {
         /*
          * Two input packets got turned into a field pair. Gawd.
          */
         av_log(avctx, AV_LOG_VERBOSE, "Don't output on next decode call.\n");
         priv->skip_next_output = 1;
-    } else if (rec_ret == 1) {
+    } else if (rec_ret == RET_COPY_AGAIN) {
         /*
          * This means we got a FMT_CHANGE event and no frame, so go around
          * again to get the frame.
