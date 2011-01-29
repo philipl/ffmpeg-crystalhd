@@ -579,7 +579,7 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
      * There's no way to detect this case right now. You have to break
      * normal MBAFF and/or PAFF handling to do it.
      */
-    if (0) {
+    if (0 && output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC) {
         av_log(priv->avctx, AV_LOG_VERBOSE, "Fieldpair from two packets.\n");
         return RET_SKIP_NEXT_COPY;
     }
@@ -738,6 +738,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
         av_log(avctx, AV_LOG_VERBOSE,
                "CrystalHD: Skipping next output.\n");
         priv->skip_next_output = 0;
+        avctx->has_b_frames--;
         return avpkt->size;
     }
 
