@@ -797,7 +797,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
 }
 
 
-AVCodec h264_crystalhd_decoder = {
+AVCodec ff_h264_crystalhd_decoder = {
     "h264_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_H264,
@@ -812,7 +812,7 @@ AVCodec h264_crystalhd_decoder = {
     .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 
-AVCodec mpeg1_crystalhd_decoder = {
+AVCodec ff_mpeg1_crystalhd_decoder = {
     "mpeg1_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_MPEG1VIDEO,
@@ -827,7 +827,7 @@ AVCodec mpeg1_crystalhd_decoder = {
     .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 
-AVCodec mpeg2_crystalhd_decoder = {
+AVCodec ff_mpeg2_crystalhd_decoder = {
     "mpeg2_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_MPEG2VIDEO,
@@ -842,7 +842,7 @@ AVCodec mpeg2_crystalhd_decoder = {
     .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 
-AVCodec mpeg4_crystalhd_decoder = {
+AVCodec ff_mpeg4_crystalhd_decoder = {
     "mpeg4_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_MPEG4,
@@ -857,7 +857,7 @@ AVCodec mpeg4_crystalhd_decoder = {
     .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 
-AVCodec msmpeg4_crystalhd_decoder = {
+AVCodec ff_msmpeg4_crystalhd_decoder = {
     "msmpeg4_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_MSMPEG4V3,
@@ -872,7 +872,7 @@ AVCodec msmpeg4_crystalhd_decoder = {
     .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 
-AVCodec vc1_crystalhd_decoder = {
+AVCodec ff_vc1_crystalhd_decoder = {
     "vc1_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_VC1,
@@ -887,7 +887,7 @@ AVCodec vc1_crystalhd_decoder = {
     .pix_fmts = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 
-AVCodec wmv3_crystalhd_decoder = {
+AVCodec ff_wmv3_crystalhd_decoder = {
     "wmv3_crystalhd",
     AVMEDIA_TYPE_VIDEO,
     CODEC_ID_WMV3,
