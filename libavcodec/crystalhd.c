@@ -128,10 +128,10 @@ static inline int extract_sps_pps_from_avcc(CHDContext *priv,
         if (data_size < nal_size)
             return -1;
 
-        priv->sps_pps_buf[0] = 0;
-        priv->sps_pps_buf[1] = 0;
-        priv->sps_pps_buf[2] = 0;
-        priv->sps_pps_buf[3] = 1;
+        priv->sps_pps_buf[priv->sps_pps_size + 0] = 0;
+        priv->sps_pps_buf[priv->sps_pps_size + 1] = 0;
+        priv->sps_pps_buf[priv->sps_pps_size + 2] = 0;
+        priv->sps_pps_buf[priv->sps_pps_size + 3] = 1;
 
         priv->sps_pps_size += 4;
 
@@ -405,16 +405,16 @@ static av_cold int init(AVCodecContext *avctx)
     subtype = id2subtype(priv, avctx->codec->id);
     switch (subtype) {
     case BC_MSUBTYPE_AVC1:
-        format.startCodeSz = priv->nal_length_size;
         if (extract_sps_pps_from_avcc(priv, extradata, extradata_size) < 0) {
             av_log(avctx, AV_LOG_VERBOSE, "extract_sps_pps failed\n");
             return -1;
         }
         format.pMetaData = priv->sps_pps_buf;
         format.metaDataSz = priv->sps_pps_size;
+        format.startCodeSz = priv->nal_length_size;
         break;
     case BC_MSUBTYPE_H264:
-        format.startCodeSz = priv->nal_length_size;
+        format.startCodeSz = 4;
         // Fall-through
     case BC_MSUBTYPE_VC1:
     case BC_MSUBTYPE_WVC1:
