@@ -170,10 +170,10 @@ static uint64_t opaque_list_push(CHDContext *priv, uint64_t reordered_opaque)
     OpaqueList *newNode = av_mallocz(sizeof (OpaqueList));
     if (priv->head == NULL) {
         newNode->fake_timestamp = TIMESTAMP_UNIT;
-        priv->head = newNode;
+        priv->head              = newNode;
     } else {
         newNode->fake_timestamp = priv->tail->fake_timestamp + TIMESTAMP_UNIT;
-        priv->tail->next = newNode;
+        priv->tail->next        = newNode;
     }
     priv->tail = newNode;
     newNode->reordered_opaque = reordered_opaque;
@@ -232,8 +232,8 @@ static void flush(AVCodecContext *avctx)
 {
     CHDContext *priv = avctx->priv_data;
 
-    avctx->has_b_frames = 0;
-    priv->last_picture = 2;
+    avctx->has_b_frames    = 0;
+    priv->last_picture     = 2;
     priv->skip_next_output = 0;
     DtsFlushInput(priv->dev, 4);
 }
@@ -291,9 +291,9 @@ static av_cold int init(AVCodecContext *avctx)
     avctx->pix_fmt = PIX_FMT_YUYV422;
 
     /* Initialize the library */
-    priv = avctx->priv_data;
-    priv->avctx = avctx;
-    priv->is_nal = avctx->extradata_size > 0 && *(avctx->extradata) == 1;
+    priv               = avctx->priv_data;
+    priv->avctx        = avctx;
+    priv->is_nal       = avctx->extradata_size > 0 && *(avctx->extradata) == 1;
     priv->last_picture = 2;
 
     memset(&format, 0, sizeof(BC_INPUT_FORMAT));
@@ -331,13 +331,13 @@ static av_cold int init(AVCodecContext *avctx)
                                        &dummy_int, NULL, 0, 0);
             av_bitstream_filter_close(bsfc);
 
-            priv->sps_pps_buf = avctx->extradata;
-            priv->sps_pps_size = avctx->extradata_size;
-            avctx->extradata = orig_data;
+            priv->sps_pps_buf     = avctx->extradata;
+            priv->sps_pps_size    = avctx->extradata_size;
+            avctx->extradata      = orig_data;
             avctx->extradata_size = orig_data_size;
 
-            format.pMetaData = priv->sps_pps_buf;
-            format.metaDataSz = priv->sps_pps_size;
+            format.pMetaData   = priv->sps_pps_buf;
+            format.metaDataSz  = priv->sps_pps_size;
             format.startCodeSz = (avctx->extradata[4] & 0x03) + 1;
         }
         break;
@@ -352,7 +352,7 @@ static av_cold int init(AVCodecContext *avctx)
     case BC_MSUBTYPE_MPEG2VIDEO:
     case BC_MSUBTYPE_DIVX:
     case BC_MSUBTYPE_DIVX311:
-        format.pMetaData = avctx->extradata;
+        format.pMetaData  = avctx->extradata;
         format.metaDataSz = avctx->extradata_size;
         break;
     default:
@@ -427,8 +427,8 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
                            VDEC_FLAG_BOTTOMFIELD;
     uint8_t bottom_first = output->PicInfo.flags & VDEC_FLAG_BOTTOM_FIRST;
 
-    int width = output->PicInfo.width * 2; // 16bits per pixel
-    int height = output->PicInfo.height;
+    int width    = output->PicInfo.width * 2; // 16bits per pixel
+    int height   = output->PicInfo.height;
     uint8_t *src = output->Ybuff;
     uint8_t *dst;
     int dStride;
@@ -440,11 +440,11 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
        return RET_ERROR;
     }
 
-    next_frame_same = output->PicInfo.picture_number ==
+    next_frame_same  = output->PicInfo.picture_number ==
                        (decoder_status.picNumFlags & ~0x40000000);
-    interlaced = ((output->PicInfo.flags & VDEC_FLAG_INTERLACED_SRC) &&
-                  !(output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC)) ||
-                 next_frame_same || bottom_field || second_field;
+    interlaced        = ((output->PicInfo.flags & VDEC_FLAG_INTERLACED_SRC) &&
+                         !(output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC)) ||
+                        next_frame_same || bottom_field || second_field;
     need_second_field = interlaced &&
                         ((!bottom_field && !bottom_first) ||
                          (bottom_field && bottom_first));
@@ -461,7 +461,7 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
     }
 
     dStride = priv->pic.linesize[0];
-    dst = priv->pic.data[0];
+    dst     = priv->pic.data[0];
 
     av_log(priv->avctx, AV_LOG_VERBOSE, "CrystalHD: Copying out frame\n");
 
@@ -499,7 +499,7 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
     }
 
     if (!need_second_field) {
-        *data_size = sizeof(AVFrame);
+        *data_size       = sizeof(AVFrame);
         *(AVFrame *)data = priv->pic;
     }
 
@@ -523,7 +523,7 @@ static inline CopyRet receive_frame(AVCodecContext *avctx,
     BC_STATUS ret;
     BC_DTS_PROC_OUT output;
     CHDContext *priv = avctx->priv_data;
-    HANDLE dev = priv->dev;
+    HANDLE dev       = priv->dev;
 
     *data_size = 0;
 
@@ -535,7 +535,7 @@ static inline CopyRet receive_frame(AVCodecContext *avctx,
     ret = DtsProcOutputNoCopy(dev, OUTPUT_PROC_TIMEOUT, &output);
     if (ret == BC_STS_FMT_CHANGE) {
         av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Initial format change\n");
-        avctx->width = output.PicInfo.width;
+        avctx->width  = output.PicInfo.width;
         avctx->height = output.PicInfo.height;
         if (output.PicInfo.height == 1088)
             avctx->height = 1080;
@@ -594,11 +594,11 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
 {
     BC_STATUS ret;
     BC_DTS_STATUS decoder_status;
-    CHDContext *priv = avctx->priv_data;
-    HANDLE dev = priv->dev;
-    uint8_t input_full = 0;
-    int len = avpkt->size;
     CopyRet rec_ret;
+    CHDContext *priv   = avctx->priv_data;
+    HANDLE dev         = priv->dev;
+    uint8_t input_full = 0;
+    int len            = avpkt->size;
 
     av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: decode_frame\n");
 
@@ -629,7 +629,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                            "CrystalHD: ProcInput failed: %u\n", ret);
                     return -1;
                 }
-                len = 0; // We don't want to try and resubmit the input...
+                len        = 0; // We don't want to try and resubmit the input
                 input_full = 0;
                 avctx->has_b_frames++;
             } else {
