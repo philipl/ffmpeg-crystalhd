@@ -273,8 +273,14 @@ static av_cold int uninit(AVCodecContext *avctx)
 static av_cold int init(AVCodecContext *avctx)
 {
     CHDContext* priv;
-    BC_INPUT_FORMAT format;
     BC_STATUS ret;
+    BC_INPUT_FORMAT format = {
+        .FGTEnable   = FALSE,
+        .Progressive = TRUE,
+        .OptFlags    = 0x80000000 | vdecFrameRate59_94 | 0x40,
+        .width       = avctx->width,
+        .height      = avctx->height,
+    };
 
     uint8_t subtype;
 
@@ -295,13 +301,6 @@ static av_cold int init(AVCodecContext *avctx)
     priv->avctx        = avctx;
     priv->is_nal       = avctx->extradata_size > 0 && *(avctx->extradata) == 1;
     priv->last_picture = 2;
-
-    memset(&format, 0, sizeof(BC_INPUT_FORMAT));
-    format.FGTEnable = FALSE;
-    format.Progressive = TRUE;
-    format.OptFlags = 0x80000000 | vdecFrameRate59_94 | 0x40;
-    format.width = avctx->width;
-    format.height = avctx->height;
 
     subtype = id2subtype(priv, avctx->codec->id);
     switch (subtype) {
@@ -521,15 +520,14 @@ static inline CopyRet receive_frame(AVCodecContext *avctx,
                                     uint8_t second_field)
 {
     BC_STATUS ret;
-    BC_DTS_PROC_OUT output;
+    BC_DTS_PROC_OUT output = {
+        .PicInfo.width  = avctx->width,
+        .PicInfo.height = avctx->height,
+    };
     CHDContext *priv = avctx->priv_data;
     HANDLE dev       = priv->dev;
 
     *data_size = 0;
-
-    memset(&output, 0, sizeof(BC_DTS_PROC_OUT));
-    output.PicInfo.width = avctx->width;
-    output.PicInfo.height = avctx->height;
 
     // Request decoded data from the driver
     ret = DtsProcOutputNoCopy(dev, OUTPUT_PROC_TIMEOUT, &output);
