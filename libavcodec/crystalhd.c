@@ -168,6 +168,11 @@ static inline void *memcpy_pic(void *dst, const void *src,
 static uint64_t opaque_list_push(CHDContext *priv, uint64_t reordered_opaque)
 {
     OpaqueList *newNode = av_mallocz(sizeof (OpaqueList));
+    if (!newNode) {
+        av_log(priv->avctx, AV_LOG_ERROR,
+               "Unable to allocate new node in OpaqueList.\n");
+        return 0;
+    }
     if (priv->head == NULL) {
         newNode->fake_timestamp = TIMESTAMP_UNIT;
         priv->head              = newNode;
@@ -315,7 +320,7 @@ static av_cold int init(AVCodecContext *avctx)
             if (!orig_data) {
                 av_log(avctx, AV_LOG_ERROR,
                        "Failed to allocate copy of extradata\n");
-                return -1;
+                return AVERROR(ENOMEM);
             }
             memcpy(orig_data, avctx->extradata, orig_data_size);
 
@@ -324,7 +329,7 @@ static av_cold int init(AVCodecContext *avctx)
             if (!bsfc) {
                 av_log(avctx, AV_LOG_ERROR,
                        "Cannot open the h264_mp4toannexb BSF!\n");
-                return -1;
+                return AVERROR_BSF_NOT_FOUND;
             }
             av_bitstream_filter_filter(bsfc, avctx, NULL, &dummy_p,
                                        &dummy_int, NULL, 0, 0);
@@ -614,6 +619,9 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                  * reorded_opaque value is in ms seems to work.
                  */
                 uint64_t pts = opaque_list_push(priv, avctx->reordered_opaque);
+                if (!pts) {
+                    return AVERROR(ENOMEM);
+                }
                 av_log(priv->avctx, AV_LOG_VERBOSE, "input \"pts\": %lu\n",
                        pts);
                 ret = DtsProcInput(dev, avpkt->data, len, pts, 0);
@@ -621,7 +629,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                     av_log(avctx, AV_LOG_WARNING,
                            "CrystalHD: ProcInput returned busy\n");
                     usleep(10000);
-                    return -1;
+                    return AVERROR(EBUSY);
                 } else if (ret != BC_STS_SUCCESS) {
                     av_log(avctx, AV_LOG_ERROR,
                            "CrystalHD: ProcInput failed: %u\n", ret);
