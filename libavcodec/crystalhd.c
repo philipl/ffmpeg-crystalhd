@@ -152,7 +152,7 @@ static inline void *memcpy_pic(void *dst, const void *src,
     int i;
     void *retval = dst;
 
-    for(i = 0; i < height; i++) {
+    for (i = 0; i < height; i++) {
         memcpy(dst, src, bytesPerLine);
         src = (const uint8_t*)src + srcStride;
         dst = (uint8_t*)dst + dstStride;
