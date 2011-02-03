@@ -3,11 +3,6 @@
  *
  * Copyright(C) 2010 Philip Langdale <ffmpeg.philipl@overt.org>
  *
- * Credits:
- * extract_sps_pps_from_avcc: from gstbcmdec
- * - Copyright(c) 2008 Broadcom Corporation.
- * - Licenced LGPL 2.1
- *
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or
@@ -87,97 +82,6 @@ typedef struct CHDContext {
 /*****************************************************************************
  * Helper functions
  ****************************************************************************/
-
-static inline int extract_sps_pps_from_avcc(CHDContext *priv,
-                                            uint8_t *data,
-                                            uint32_t data_size)
-{
-    int profile;
-    unsigned int nal_size;
-    unsigned int num_sps, num_pps;
-
-    if (*data == 1) {
-        priv->is_nal = 1;
-        priv->nal_length_size = (data[4] & 0x03) + 1;
-    } else {
-        priv->is_nal = 0;
-        priv->nal_length_size = 4;
-        return 0;
-    }
-
-    priv->sps_pps_buf = av_mallocz(data_size);
-    priv->sps_pps_size = 0;
-
-    profile = AV_RB24(data + 1);
-    av_log(priv->avctx, AV_LOG_VERBOSE, "profile %06x", profile);
-
-    num_sps = data[5] & 0x1f;
-    av_log(priv->avctx, AV_LOG_VERBOSE, "num sps %d", num_sps);
-
-    data += 6;
-    data_size -= 6;
-
-    for (unsigned int i = 0; i < num_sps; i++) {
-        if (data_size < 2)
-            return -1;
-
-        nal_size = AV_RB16(data);
-        data += 2;
-        data_size -= 2;
-
-        if (data_size < nal_size)
-            return -1;
-
-        priv->sps_pps_buf[priv->sps_pps_size + 0] = 0;
-        priv->sps_pps_buf[priv->sps_pps_size + 1] = 0;
-        priv->sps_pps_buf[priv->sps_pps_size + 2] = 0;
-        priv->sps_pps_buf[priv->sps_pps_size + 3] = 1;
-
-        priv->sps_pps_size += 4;
-
-        memcpy(priv->sps_pps_buf + priv->sps_pps_size, data, nal_size);
-        priv->sps_pps_size += nal_size;
-
-        data += nal_size;
-        data_size -= nal_size;
-    }
-
-    if (data_size < 1)
-        return -1;
-
-    num_pps = data[0];
-    data += 1;
-    data_size -= 1;
-
-    for (unsigned int i = 0; i < num_pps; i++) {
-        if (data_size < 2)
-            return -1;
-
-        nal_size = AV_RB16(data);
-        data += 2;
-        data_size -= 2;
-
-        if (data_size < nal_size)
-            return -1;
-
-        priv->sps_pps_buf[priv->sps_pps_size + 0] = 0;
-        priv->sps_pps_buf[priv->sps_pps_size + 1] = 0;
-        priv->sps_pps_buf[priv->sps_pps_size + 2] = 0;
-        priv->sps_pps_buf[priv->sps_pps_size + 3] = 1;
-
-        priv->sps_pps_size += 4;
-
-        memcpy(priv->sps_pps_buf + priv->sps_pps_size, data, nal_size);
-        priv->sps_pps_size += nal_size;
-
-        data += nal_size;
-        data_size -= nal_size;
-    }
-
-    av_log(priv->avctx, AV_LOG_VERBOSE, "data size at end = %d\n", data_size);
-
-    return 0;
-}
 
 static inline uint8_t id2subtype(CHDContext *priv, enum CodecID id)
 {
@@ -374,8 +278,6 @@ static av_cold int init(AVCodecContext *avctx)
     BC_STATUS ret;
 
     uint8_t subtype;
-    uint8_t *extradata = avctx->extradata;
-    int extradata_size = avctx->extradata_size;
 
     uint32_t mode = DTS_PLAYBACK_MODE |
                     DTS_LOAD_FILE_PLAY_FW |
@@ -392,7 +294,7 @@ static av_cold int init(AVCodecContext *avctx)
     /* Initialize the library */
     priv = avctx->priv_data;
     priv->avctx = avctx;
-    priv->is_nal = extradata_size > 0 && *extradata == 1;
+    priv->is_nal = avctx->extradata_size > 0 && *(avctx->extradata) == 1;
     priv->last_picture = 2;
 
     memset(&format, 0, sizeof(BC_INPUT_FORMAT));
@@ -405,13 +307,40 @@ static av_cold int init(AVCodecContext *avctx)
     subtype = id2subtype(priv, avctx->codec->id);
     switch (subtype) {
     case BC_MSUBTYPE_AVC1:
-        if (extract_sps_pps_from_avcc(priv, extradata, extradata_size) < 0) {
-            av_log(avctx, AV_LOG_VERBOSE, "extract_sps_pps failed\n");
-            return -1;
+        {
+            uint8_t *dummy_p;
+            int dummy_int;
+            AVBitStreamFilterContext *bsfc;
+
+            uint32_t orig_data_size = avctx->extradata_size;
+            uint8_t *orig_data = av_malloc(orig_data_size);
+            if (!orig_data) {
+                av_log(avctx, AV_LOG_ERROR,
+                       "Failed to allocate copy of extradata\n");
+                return -1;
+            }
+            memcpy(orig_data, avctx->extradata, orig_data_size);
+
+
+            bsfc= av_bitstream_filter_init("h264_mp4toannexb");
+            if (!bsfc) {
+                av_log(avctx, AV_LOG_ERROR,
+                       "Cannot open the h264_mp4toannexb BSF!\n");
+                return -1;
+            }
+            av_bitstream_filter_filter(bsfc, avctx, NULL, &dummy_p,
+                                       &dummy_int, NULL, 0, 0);
+            av_bitstream_filter_close(bsfc);
+
+            priv->sps_pps_buf = avctx->extradata;
+            priv->sps_pps_size = avctx->extradata_size;
+            avctx->extradata = orig_data;
+            avctx->extradata_size = orig_data_size;
+
+            format.pMetaData = priv->sps_pps_buf;
+            format.metaDataSz = priv->sps_pps_size;
+            format.startCodeSz = (avctx->extradata[4] & 0x03) + 1;
         }
-        format.pMetaData = priv->sps_pps_buf;
-        format.metaDataSz = priv->sps_pps_size;
-        format.startCodeSz = priv->nal_length_size;
         break;
     case BC_MSUBTYPE_H264:
         format.startCodeSz = 4;
@@ -424,8 +353,8 @@ static av_cold int init(AVCodecContext *avctx)
     case BC_MSUBTYPE_MPEG2VIDEO:
     case BC_MSUBTYPE_DIVX:
     case BC_MSUBTYPE_DIVX311:
-        format.pMetaData = extradata;
-        format.metaDataSz = extradata_size;
+        format.pMetaData = avctx->extradata;
+        format.metaDataSz = avctx->extradata_size;
         break;
     default:
         av_log(avctx, AV_LOG_ERROR, "CrystalHD: Unknown codec name\n");
