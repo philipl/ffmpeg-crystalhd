@@ -44,15 +44,14 @@
  * Module private data
  ****************************************************************************/
 
-typedef enum CopyRet CopyRet;
-
-enum CopyRet {
+typedef enum {
     RET_ERROR = -1,
     RET_OK = 0,
     RET_COPY_AGAIN = 1,
     RET_SKIP_NEXT_COPY = 2,
-};
+} CopyRet;
 
+/* Need typedef to allow next pointer. */
 typedef struct OpaqueList OpaqueList;
 
 struct OpaqueList {
@@ -61,7 +60,7 @@ struct OpaqueList {
     uint64_t reordered_opaque;
 };
 
-typedef struct CHDContext {
+typedef struct {
     AVCodecContext *avctx;
     AVFrame pic;
     HANDLE dev;
