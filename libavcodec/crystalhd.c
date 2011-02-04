@@ -731,6 +731,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
 }
 
 
+#if CONFIG_H264_CRYSTALHD_DECODER
 AVCodec ff_h264_crystalhd_decoder = {
     .name           = "h264_crystalhd",
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -744,7 +745,9 @@ AVCodec ff_h264_crystalhd_decoder = {
     .long_name      = NULL_IF_CONFIG_SMALL("H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (CrystalHD acceleration)"),
     .pix_fmts       = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
+#endif
 
+#if CONFIG_MPEG1_CRYSTALHD_DECODER
 AVCodec ff_mpeg1_crystalhd_decoder = {
     .name           = "mpeg1_crystalhd",
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -758,7 +761,9 @@ AVCodec ff_mpeg1_crystalhd_decoder = {
     .long_name      = NULL_IF_CONFIG_SMALL("MPEG-1 Video (CrystalHD acceleration)"),
     .pix_fmts       = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
+#endif
 
+#if CONFIG_MPEG2_CRYSTALHD_DECODER
 AVCodec ff_mpeg2_crystalhd_decoder = {
     .name           = "mpeg2_crystalhd",
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -772,7 +777,9 @@ AVCodec ff_mpeg2_crystalhd_decoder = {
     .long_name      = NULL_IF_CONFIG_SMALL("MPEG-2 Video (CrystalHD acceleration)"),
     .pix_fmts       = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
+#endif
 
+#if CONFIG_MPEG4_CRYSTALHD_DECODER
 AVCodec ff_mpeg4_crystalhd_decoder = {
     .name           = "mpeg4_crystalhd",
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -786,7 +793,9 @@ AVCodec ff_mpeg4_crystalhd_decoder = {
     .long_name      = NULL_IF_CONFIG_SMALL("MPEG-4 Part 2 (CrystalHD acceleration)"),
     .pix_fmts       = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
+#endif
 
+#if CONFIG_MSMPEG4_CRYSTALHD_DECODER
 AVCodec ff_msmpeg4_crystalhd_decoder = {
     .name           = "msmpeg4_crystalhd",
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -800,7 +809,9 @@ AVCodec ff_msmpeg4_crystalhd_decoder = {
     .long_name      = NULL_IF_CONFIG_SMALL("MPEG-4 Part 2 Microsoft variant version 3 (CrystalHD acceleration)"),
     .pix_fmts       = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
+#endif
 
+#if CONFIG_VC1_CRYSTALHD_DECODER
 AVCodec ff_vc1_crystalhd_decoder = {
     .name           = "vc1_crystalhd",
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -814,7 +825,9 @@ AVCodec ff_vc1_crystalhd_decoder = {
     .long_name      = NULL_IF_CONFIG_SMALL("SMPTE VC-1 (CrystalHD acceleration)"),
     .pix_fmts       = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
+#endif
 
+#if CONFIG_WMV3_CRYSTALHD_DECODER
 AVCodec ff_wmv3_crystalhd_decoder = {
     .name           = "wmv3_crystalhd",
     .type           = AVMEDIA_TYPE_VIDEO,
@@ -828,3 +841,4 @@ AVCodec ff_wmv3_crystalhd_decoder = {
     .long_name      = NULL_IF_CONFIG_SMALL("Windows Media Video 9 (CrystalHD acceleration)"),
     .pix_fmts       = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
+#endif
