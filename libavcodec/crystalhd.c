@@ -261,9 +261,6 @@ static av_cold int uninit(AVCodecContext *avctx)
     CHDContext *priv = avctx->priv_data;
     HANDLE device;
 
-    if (!priv)
-        return 0;
-
     device = priv->dev;
     DtsStopDecoder(device);
     DtsCloseDecoder(device);
