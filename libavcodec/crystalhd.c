@@ -454,8 +454,8 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
        return RET_ERROR;
     }
 
-    next_frame_same  = output->PicInfo.picture_number ==
-                       (decoder_status.picNumFlags & ~0x40000000);
+    next_frame_same   = output->PicInfo.picture_number ==
+                        (decoder_status.picNumFlags & ~0x40000000);
     interlaced        = ((output->PicInfo.flags & VDEC_FLAG_INTERLACED_SRC) &&
                          !(output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC)) ||
                         next_frame_same || bottom_field || second_field;
