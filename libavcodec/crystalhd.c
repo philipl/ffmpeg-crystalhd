@@ -252,6 +252,7 @@ static void flush(AVCodecContext *avctx)
     avctx->has_b_frames    = 0;
     priv->last_picture     = 2;
     priv->skip_next_output = 0;
+    /* Flush mode 4 flushes all software and hardware buffers. */
     DtsFlushInput(priv->dev, 4);
 }
 
