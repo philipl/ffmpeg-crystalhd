@@ -439,7 +439,7 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
 
     uint8_t bottom_field = (output->PicInfo.flags & VDEC_FLAG_BOTTOMFIELD) ==
                            VDEC_FLAG_BOTTOMFIELD;
-    uint8_t bottom_first = output->PicInfo.flags & VDEC_FLAG_BOTTOM_FIRST;
+    uint8_t bottom_first = !!(output->PicInfo.flags & VDEC_FLAG_BOTTOM_FIRST);
 
     int width    = output->PicInfo.width * 2; // 16bits per pixel
     int height   = output->PicInfo.height;
@@ -459,9 +459,7 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
     interlaced        = ((output->PicInfo.flags & VDEC_FLAG_INTERLACED_SRC) &&
                          !(output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC)) ||
                         next_frame_same || bottom_field || second_field;
-    need_second_field = interlaced &&
-                        ((!bottom_field && !bottom_first) ||
-                         (bottom_field && bottom_first));
+    need_second_field = interlaced && (!bottom_field == !bottom_first);
 
     av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: next_frame_same: %u | %u | %u\n",
            next_frame_same, output->PicInfo.picture_number,
