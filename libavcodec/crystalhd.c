@@ -441,7 +441,7 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
                            VDEC_FLAG_BOTTOMFIELD;
     uint8_t bottom_first = !!(output->PicInfo.flags & VDEC_FLAG_BOTTOM_FIRST);
 
-    int width    = output->PicInfo.width * 2; // 16bits per pixel
+    int width    = output->PicInfo.width * 2; // 16bits per pixel for YUYV
     int height   = output->PicInfo.height;
     uint8_t *src = output->Ybuff;
     uint8_t *dst;
