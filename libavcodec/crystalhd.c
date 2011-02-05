@@ -36,7 +36,9 @@
 #include "avcodec.h"
 #include "libavutil/intreadwrite.h"
 
+/* Timeout parameter passed to DtsProcOutput() in us */
 #define OUTPUT_PROC_TIMEOUT 50
+/* Step between fake timestamps passed to hardware in units of 100ns */
 #define TIMESTAMP_UNIT 100000
 
 
