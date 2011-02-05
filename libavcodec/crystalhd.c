@@ -570,6 +570,10 @@ static inline CopyRet receive_frame(AVCodecContext *avctx,
                 /*
                  * Have we lost frames? If so, we need to shrink the
                  * pipeline length appropriately.
+                 *
+                 * XXX: I have no idea what the semantics of this situation
+                 * are so I don't even know if we've lost frames or which
+                 * ones.
                  */
             }
 
@@ -620,11 +624,11 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                 /*
                  * Despite being notionally opaque, either libcrystalhd or
                  * the hardware itself will mangle pts values that are too
-                 * small or too large. The docs claim it should be in uints
+                 * small or too large. The docs claim it should be in units
                  * of 100ns. Given that we're nominally dealing with a black
                  * box on both sides, any transform we do has no guarantee of
-                 * avoiding mangling but, empirically, scalling as if the
-                 * reorded_opaque value is in ms seems to work.
+                 * avoiding mangling so we need to build a mapping to values
+                 * we know will not be mangled.
                  */
                 uint64_t pts = opaque_list_push(priv, avctx->reordered_opaque);
                 if (!pts) {
