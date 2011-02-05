@@ -147,19 +147,16 @@ static inline void print_frame_info(CHDContext *priv, BC_DTS_PROC_OUT *output)
            output->PicInfo.other.h264.valid);
 }
 
-static inline void *memcpy_pic(void *dst, const void *src,
-                               int bytesPerLine, int height,
-                               int dstStride, int srcStride)
+static inline void memcpy_pic(void *dst, const void *src,
+                              int bytesPerLine, int height,
+                              int dstStride, int srcStride)
 {
     int i;
-    void *retval = dst;
-
     for (i = 0; i < height; i++) {
         memcpy(dst, src, bytesPerLine);
         src = (const uint8_t*)src + srcStride;
         dst = (uint8_t*)dst + dstStride;
     }
-    return retval;
 }
 
 
