@@ -185,6 +185,11 @@ static uint64_t opaque_list_push(CHDContext *priv, uint64_t reordered_opaque)
     return newNode->fake_timestamp;
 }
 
+/*
+ * The OpaqueList is built in decode order, while elements will be removed
+ * in presentation order. If frames are reordered, this means we must be
+ * able to remove elements that are not the first element.
+ */
 static uint64_t opaque_list_pop(CHDContext *priv, uint64_t fake_timestamp)
 {
     OpaqueList *node = priv->head;
@@ -195,6 +200,10 @@ static uint64_t opaque_list_pop(CHDContext *priv, uint64_t fake_timestamp)
         return AV_NOPTS_VALUE;
     }
 
+    /*
+     * The first element is special-cased because we have to manipulate
+     * the head pointer rather than the previous element in the list.
+     */
     if (priv->head->fake_timestamp == fake_timestamp) {
         uint64_t reordered_opaque = node->reordered_opaque;
         priv->head = node->next;
@@ -206,6 +215,10 @@ static uint64_t opaque_list_pop(CHDContext *priv, uint64_t fake_timestamp)
         return reordered_opaque;
     }
 
+    /*
+     * The list is processed at arm's length so that we have the
+     * previous element available to rewrite its next pointer.
+     */
     while (node->next) {
         OpaqueList *next = node->next;
         if (next->fake_timestamp == fake_timestamp) {
