@@ -250,7 +250,7 @@ static void flush(AVCodecContext *avctx)
     CHDContext *priv = avctx->priv_data;
 
     avctx->has_b_frames    = 0;
-    priv->last_picture     = 2;
+    priv->last_picture     = -1;
     priv->skip_next_output = 0;
     /* Flush mode 4 flushes all software and hardware buffers. */
     DtsFlushInput(priv->dev, 4);
@@ -315,7 +315,7 @@ static av_cold int init(AVCodecContext *avctx)
     priv               = avctx->priv_data;
     priv->avctx        = avctx;
     priv->is_nal       = avctx->extradata_size > 0 && *(avctx->extradata) == 1;
-    priv->last_picture = 2;
+    priv->last_picture = -1;
 
     subtype = id2subtype(priv, avctx->codec->id);
     switch (subtype) {
@@ -554,6 +554,14 @@ static inline CopyRet receive_frame(AVCodecContext *avctx,
     } else if (ret == BC_STS_SUCCESS) {
         int copy_ret = -1;
         if (output.PoutFlags & BC_POUT_FLAGS_PIB_VALID) {
+            if (priv->last_picture == -1) {
+                /*
+                 * Init to one less, so that the incrementing code doesn't
+                 * need to be special-cased.
+                 */
+                priv->last_picture = output.PicInfo.picture_number - 1;
+            }
+
             if (output.PicInfo.timeStamp == 0) {
                 av_log(avctx, AV_LOG_VERBOSE,
                        "CrystalHD: Not returning packed frame twice.\n");
