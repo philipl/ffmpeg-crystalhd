@@ -548,8 +548,6 @@ static inline CopyRet receive_frame(AVCodecContext *avctx,
         av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Initial format change\n");
         avctx->width  = output.PicInfo.width;
         avctx->height = output.PicInfo.height;
-        if (output.PicInfo.height == 1088)
-            avctx->height = 1080;
         return RET_COPY_AGAIN;
     } else if (ret == BC_STS_SUCCESS) {
         int copy_ret = -1;
