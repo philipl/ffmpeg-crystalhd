@@ -25,6 +25,7 @@
  ****************************************************************************/
 
 #define _XOPEN_SOURCE 600
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -113,7 +114,7 @@ static inline void print_frame_info(CHDContext *priv, BC_DTS_PROC_OUT *output)
            output->YBuffDoneSz);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tUVBuffDoneSz: %u\n",
            output->UVBuffDoneSz);
-    av_log(priv->avctx, AV_LOG_VERBOSE, "\tTimestamp: %lu\n",
+    av_log(priv->avctx, AV_LOG_VERBOSE, "\tTimestamp: %"PRIu64"\n",
            output->PicInfo.timeStamp);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tPicture Number: %u\n",
            output->PicInfo.picture_number);
@@ -506,7 +507,7 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
     if (output->PicInfo.timeStamp != 0) {
         priv->pic.reordered_opaque =
             opaque_list_pop(priv, output->PicInfo.timeStamp);
-        av_log(avctx, AV_LOG_VERBOSE, "output \"pts\": %lu\n",
+        av_log(avctx, AV_LOG_VERBOSE, "output \"pts\": %"PRIu64"\n",
                priv->pic.reordered_opaque);
     }
 
@@ -640,8 +641,8 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                 if (!pts) {
                     return AVERROR(ENOMEM);
                 }
-                av_log(priv->avctx, AV_LOG_VERBOSE, "input \"pts\": %lu\n",
-                       pts);
+                av_log(priv->avctx, AV_LOG_VERBOSE,
+                       "input \"pts\": %"PRIu64"\n", pts);
                 ret = DtsProcInput(dev, avpkt->data, len, pts, 0);
                 if (ret == BC_STS_BUSY) {
                     av_log(avctx, AV_LOG_WARNING,
