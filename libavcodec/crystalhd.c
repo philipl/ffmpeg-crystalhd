@@ -505,10 +505,10 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
         priv->pic.top_field_first = !bottom_first;
 
     if (output->PicInfo.timeStamp != 0) {
-        priv->pic.reordered_opaque =
+        priv->pic.pkt_pts =
             opaque_list_pop(priv, output->PicInfo.timeStamp);
         av_log(avctx, AV_LOG_VERBOSE, "output \"pts\": %"PRIu64"\n",
-               priv->pic.reordered_opaque);
+               priv->pic.pkt_pts);
     }
 
     if (!need_second_field) {
@@ -635,7 +635,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
              * avoiding mangling so we need to build a mapping to values
              * we know will not be mangled.
              */
-            uint64_t pts = opaque_list_push(priv, avctx->reordered_opaque);
+            uint64_t pts = opaque_list_push(priv, avctx->pkt->pts);
             if (!pts) {
                 return AVERROR(ENOMEM);
             }
