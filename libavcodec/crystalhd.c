@@ -72,6 +72,7 @@ typedef struct {
     uint32_t sps_pps_size;
     uint8_t nal_length_size;
     uint8_t is_nal;
+    uint8_t output_ready;
     uint8_t skip_next_output;
 
     uint64_t last_picture;
@@ -252,6 +253,7 @@ static void flush(AVCodecContext *avctx)
 
     avctx->has_b_frames    = 0;
     priv->last_picture     = -1;
+    priv->output_ready     = 0;
     priv->skip_next_output = 0;
     /* Flush mode 4 flushes all software and hardware buffers. */
     DtsFlushInput(priv->dev, 4);
@@ -676,8 +678,15 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
 
     /*
      * No frames ready. Don't try to extract.
+     *
+     * Empirical testing shows that ReadyListCount can be a damn lie,
+     * and ProcOut still fails when count > 0. The same testing showed
+     * that two more iterations were needed before ProcOutput would
+     * succeed.
      */
-    if (decoder_status.ReadyListCount == 0) {
+    if (decoder_status.ReadyListCount == 0 || priv->output_ready < 2) {
+        if (decoder_status.ReadyListCount != 0)
+            priv->output_ready++;
         usleep(50000);
         av_log(avctx, AV_LOG_INFO,
                "CrystalHD: No frames ready. Returning\n");
