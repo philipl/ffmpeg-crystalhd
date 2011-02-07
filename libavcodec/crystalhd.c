@@ -583,7 +583,10 @@ static inline CopyRet receive_frame(AVCodecContext *avctx,
                  * XXX: I have no idea what the semantics of this situation
                  * are so I don't even know if we've lost frames or which
                  * ones.
+                 *
+                 * In any case, only warn the first time.
                  */
+               priv->last_picture = output.PicInfo.picture_number - 1;
             }
 
             copy_ret = copy_frame(avctx, &output, data, data_size, second_field);
