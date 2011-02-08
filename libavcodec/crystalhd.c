@@ -48,9 +48,9 @@
  ****************************************************************************/
 
 typedef enum {
-    RET_ERROR = -1,
-    RET_OK = 0,
-    RET_COPY_AGAIN = 1,
+    RET_ERROR          = -1,
+    RET_OK             = 0,
+    RET_COPY_AGAIN     = 1,
     RET_SKIP_NEXT_COPY = 2,
 } CopyRet;
 
