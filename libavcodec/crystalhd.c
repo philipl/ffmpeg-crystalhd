@@ -171,7 +171,7 @@ static uint64_t opaque_list_push(CHDContext *priv, uint64_t reordered_opaque)
                "Unable to allocate new node in OpaqueList.\n");
         return 0;
     }
-    if (priv->head == NULL) {
+    if (!priv->head) {
         newNode->fake_timestamp = TIMESTAMP_UNIT;
         priv->head              = newNode;
     } else {
@@ -193,7 +193,7 @@ static uint64_t opaque_list_pop(CHDContext *priv, uint64_t fake_timestamp)
 {
     OpaqueList *node = priv->head;
 
-    if (priv->head == NULL) {
+    if (!priv->head) {
         av_log(priv->avctx, AV_LOG_ERROR,
                "CrystalHD: Attempted to query non-existent timestamps.\n");
         return AV_NOPTS_VALUE;
@@ -208,7 +208,7 @@ static uint64_t opaque_list_pop(CHDContext *priv, uint64_t fake_timestamp)
         priv->head = node->next;
         av_free(node);
 
-        if (priv->head->next == NULL)
+        if (!priv->head->next)
             priv->tail = priv->head;
 
         return reordered_opaque;
@@ -225,7 +225,7 @@ static uint64_t opaque_list_pop(CHDContext *priv, uint64_t fake_timestamp)
             node->next = next->next;
             av_free(next);
 
-            if (node->next == NULL)
+            if (!node->next)
                priv->tail = node;
 
             return reordered_opaque;
