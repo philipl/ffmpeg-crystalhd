@@ -335,7 +335,7 @@ static av_cold int init(AVCodecContext *avctx)
             memcpy(orig_data, avctx->extradata, orig_data_size);
 
 
-            bsfc= av_bitstream_filter_init("h264_mp4toannexb");
+            bsfc = av_bitstream_filter_init("h264_mp4toannexb");
             if (!bsfc) {
                 av_log(avctx, AV_LOG_ERROR,
                        "Cannot open the h264_mp4toannexb BSF!\n");
@@ -504,8 +504,7 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
         priv->pic.top_field_first = !bottom_first;
 
     if (output->PicInfo.timeStamp != 0) {
-        priv->pic.pkt_pts =
-            opaque_list_pop(priv, output->PicInfo.timeStamp);
+        priv->pic.pkt_pts = opaque_list_pop(priv, output->PicInfo.timeStamp);
         av_log(avctx, AV_LOG_VERBOSE, "output \"pts\": %"PRIu64"\n",
                priv->pic.pkt_pts);
     }
@@ -688,8 +687,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
         if (decoder_status.ReadyListCount != 0)
             priv->output_ready++;
         usleep(50000);
-        av_log(avctx, AV_LOG_INFO,
-               "CrystalHD: No frames ready. Returning\n");
+        av_log(avctx, AV_LOG_INFO, "CrystalHD: No frames ready. Returning\n");
         return len;
     }
 
