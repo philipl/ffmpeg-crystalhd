@@ -54,14 +54,11 @@ typedef enum {
     RET_SKIP_NEXT_COPY = 2,
 } CopyRet;
 
-/* Need typedef to allow next pointer. */
-typedef struct OpaqueList OpaqueList;
-
-struct OpaqueList {
-    OpaqueList *next;
+typedef struct OpaqueList {
+    struct OpaqueList *next;
     uint64_t fake_timestamp;
     uint64_t reordered_opaque;
-};
+} OpaqueList;
 
 typedef struct {
     AVCodecContext *avctx;
