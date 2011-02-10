@@ -370,7 +370,7 @@ static av_cold int init(AVCodecContext *avctx)
         break;
     default:
         av_log(avctx, AV_LOG_ERROR, "CrystalHD: Unknown codec name\n");
-        return -1;
+        return AVERROR(EINVAL);
     }
     format.mSubtype = subtype;
 
@@ -380,16 +380,14 @@ static av_cold int init(AVCodecContext *avctx)
     ret = DtsDeviceOpen(&priv->dev, mode);
     if (ret != BC_STS_SUCCESS) {
         av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: DtsDeviceOpen failed\n");
-        uninit(avctx);
-        return -1;
+        goto fail;
     }
 
     ret = DtsCrystalHDVersion(priv->dev, &version);
     if (ret != BC_STS_SUCCESS) {
         av_log(avctx, AV_LOG_VERBOSE,
                "CrystalHD: DtsCrystalHDVersion failed\n");
-        uninit(avctx);
-        return -1;
+        goto fail;
     }
     priv->is_70012 = version.device == 0;
 
@@ -397,46 +395,44 @@ static av_cold int init(AVCodecContext *avctx)
         (subtype == BC_MSUBTYPE_DIVX || subtype == BC_MSUBTYPE_DIVX311)) {
         av_log(avctx, AV_LOG_VERBOSE,
                "CrystalHD: BCM70012 doesn't support MPEG4-ASP/DivX/Xvid\n");
-        uninit(avctx);
-        return -1;
+        goto fail;
     }
 
     ret = DtsSetInputFormat(priv->dev, &format);
     if (ret != BC_STS_SUCCESS) {
         av_log(avctx, AV_LOG_ERROR, "CrystalHD: SetInputFormat failed\n");
-        uninit(avctx);
-        return -1;
+        goto fail;
     }
 
     ret = DtsOpenDecoder(priv->dev, BC_STREAM_TYPE_ES);
     if (ret != BC_STS_SUCCESS) {
         av_log(avctx, AV_LOG_ERROR, "CrystalHD: DtsOpenDecoder failed\n");
-        uninit(avctx);
-        return -1;
+        goto fail;
     }
 
     ret = DtsSetColorSpace(priv->dev, OUTPUT_MODE422_YUY2);
     if (ret != BC_STS_SUCCESS) {
         av_log(avctx, AV_LOG_ERROR, "CrystalHD: DtsSetColorSpace failed\n");
-        uninit(avctx);
-        return -1;
+        goto fail;
     }
     ret = DtsStartDecoder(priv->dev);
     if (ret != BC_STS_SUCCESS) {
         av_log(avctx, AV_LOG_ERROR, "CrystalHD: DtsStartDecoder failed\n");
-        uninit(avctx);
-        return -1;
+        goto fail;
     }
     ret = DtsStartCapture(priv->dev);
     if (ret != BC_STS_SUCCESS) {
         av_log(avctx, AV_LOG_ERROR, "CrystalHD: DtsStartCapture failed\n");
-        uninit(avctx);
-        return -1;
+        goto fail;
     }
 
     av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Init complete.\n");
 
     return 0;
+
+ fail:
+    uninit(avctx);
+    return -1;
 }
 
 
