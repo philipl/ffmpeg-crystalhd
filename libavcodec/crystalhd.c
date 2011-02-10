@@ -35,6 +35,7 @@
 #include <libcrystalhd/libcrystalhd_if.h>
 
 #include "avcodec.h"
+#include "libavcore/imgutils.h"
 #include "libavutil/intreadwrite.h"
 
 /* Timeout parameter passed to DtsProcOutput() in us */
@@ -65,6 +66,7 @@ typedef struct {
     AVFrame pic;
     HANDLE dev;
 
+    uint8_t is_70012;
     uint8_t *sps_pps_buf;
     uint32_t sps_pps_size;
     uint8_t nal_length_size;
@@ -144,18 +146,6 @@ static inline void print_frame_info(CHDContext *priv, BC_DTS_PROC_OUT *output)
            output->PicInfo.n_drop);
     av_log(priv->avctx, AV_LOG_VERBOSE, "\tH264 Valid Fields: 0x%08x\n",
            output->PicInfo.other.h264.valid);
-}
-
-static inline void memcpy_pic(void *dst, const void *src,
-                              int bytesPerLine, int height,
-                              int dstStride, int srcStride)
-{
-    int i;
-    for (i = 0; i < height; i++) {
-        memcpy(dst, src, bytesPerLine);
-        src = (const uint8_t*)src + srcStride;
-        dst = (uint8_t*)dst + dstStride;
-    }
 }
 
 
@@ -289,6 +279,7 @@ static av_cold int init(AVCodecContext *avctx)
 {
     CHDContext* priv;
     BC_STATUS ret;
+    BC_INFO_CRYSTAL version;
     BC_INPUT_FORMAT format = {
         .FGTEnable   = FALSE,
         .Progressive = TRUE,
@@ -385,6 +376,23 @@ static av_cold int init(AVCodecContext *avctx)
         return -1;
     }
 
+    ret = DtsCrystalHDVersion(priv->dev, &version);
+    if (ret != BC_STS_SUCCESS) {
+        av_log(avctx, AV_LOG_VERBOSE,
+               "CrystalHD: DtsCrystalHDVersion failed\n");
+        uninit(avctx);
+        return -1;
+    }
+    priv->is_70012 = version.device == 0;
+
+    if (priv->is_70012 &&
+        (subtype == BC_MSUBTYPE_DIVX || subtype == BC_MSUBTYPE_DIVX311)) {
+        av_log(avctx, AV_LOG_VERBOSE,
+               "CrystalHD: BCM70012 doesn't support MPEG4-ASP/DivX/Xvid\n");
+        uninit(avctx);
+        return -1;
+    }
+
     ret = DtsSetInputFormat(priv->dev, &format);
     if (ret != BC_STS_SUCCESS) {
         av_log(avctx, AV_LOG_ERROR, "CrystalHD: SetInputFormat failed\n");
@@ -441,9 +449,11 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
                            VDEC_FLAG_BOTTOMFIELD;
     uint8_t bottom_first = !!(output->PicInfo.flags & VDEC_FLAG_BOTTOM_FIRST);
 
-    int width    = output->PicInfo.width * 2; // 16bits per pixel for YUYV
+    int width    = output->PicInfo.width;
     int height   = output->PicInfo.height;
+    int bwidth;
     uint8_t *src = output->Ybuff;
+    int sStride;
     uint8_t *dst;
     int dStride;
 
@@ -472,6 +482,21 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
         return RET_ERROR;
     }
 
+    bwidth = av_image_get_linesize(avctx->pix_fmt, width, 0);
+    if (priv->is_70012) {
+        int pStride;
+
+        if (width < 720)
+            pStride = 720;
+        else if (width < 1280)
+            pStride = 1280;
+        else if (width < 1080)
+            pStride = 1080;
+        sStride = av_image_get_linesize(avctx->pix_fmt, pStride, 0);
+    } else {
+        sStride = bwidth;
+    }
+
     dStride = priv->pic.linesize[0];
     dst     = priv->pic.data[0];
 
@@ -491,12 +516,12 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
         }
 
         for (sY = 0; sY < height; dY++, sY++) {
-            memcpy(&(dst[dY * dStride]), &(src[sY * width]), width);
+            memcpy(&(dst[dY * dStride]), &(src[sY * sStride]), bwidth);
             if (interlaced)
                 dY++;
         }
     } else {
-        memcpy_pic(dst, src, width, height, dStride, width);
+        av_image_copy_plane(dst, dStride, src, sStride, bwidth, height);
     }
 
     priv->pic.interlaced_frame = interlaced;
