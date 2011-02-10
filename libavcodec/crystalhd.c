@@ -85,7 +85,7 @@ typedef struct {
  * Helper functions
  ****************************************************************************/
 
-static inline uint8_t id2subtype(CHDContext *priv, enum CodecID id)
+static inline BC_MEDIA_SUBTYPE id2subtype(CHDContext *priv, enum CodecID id)
 {
     switch (id) {
     case CODEC_ID_MPEG4:
@@ -288,7 +288,7 @@ static av_cold int init(AVCodecContext *avctx)
         .height      = avctx->height,
     };
 
-    uint8_t subtype;
+    BC_MEDIA_SUBTYPE subtype;
 
     uint32_t mode = DTS_PLAYBACK_MODE |
                     DTS_LOAD_FILE_PLAY_FW |
