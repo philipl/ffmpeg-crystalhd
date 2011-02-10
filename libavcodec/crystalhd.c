@@ -315,6 +315,7 @@ static av_cold int init(AVCodecContext *avctx)
             uint8_t *dummy_p;
             int dummy_int;
             AVBitStreamFilterContext *bsfc;
+            int bsf_ret;
 
             uint32_t orig_data_size = avctx->extradata_size;
             uint8_t *orig_data = av_malloc(orig_data_size);
@@ -333,9 +334,15 @@ static av_cold int init(AVCodecContext *avctx)
                 av_free(orig_data);
                 return AVERROR_BSF_NOT_FOUND;
             }
-            av_bitstream_filter_filter(bsfc, avctx, NULL, &dummy_p,
-                                       &dummy_int, NULL, 0, 0);
+            bsf_ret = av_bitstream_filter_filter(bsfc, avctx, NULL, &dummy_p,
+                                                 &dummy_int, NULL, 0, 0);
             av_bitstream_filter_close(bsfc);
+            if (bsf_ret < 0) {
+                av_log(avctx, AV_LOG_ERROR,
+                       "Failed to convert mp4 extradata to annex b\n");
+                av_free(orig_data);
+                return bsf_ret;
+            }
 
             priv->sps_pps_buf     = avctx->extradata;
             priv->sps_pps_size    = avctx->extradata_size;
