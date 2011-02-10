@@ -330,6 +330,7 @@ static av_cold int init(AVCodecContext *avctx)
             if (!bsfc) {
                 av_log(avctx, AV_LOG_ERROR,
                        "Cannot open the h264_mp4toannexb BSF!\n");
+                av_free(orig_data);
                 return AVERROR_BSF_NOT_FOUND;
             }
             av_bitstream_filter_filter(bsfc, avctx, NULL, &dummy_p,
