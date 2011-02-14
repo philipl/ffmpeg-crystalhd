@@ -429,6 +429,23 @@ static av_cold int init(AVCodecContext *avctx)
 }
 
 
+/*
+ * The CrystalHD doesn't report interlaced H.264 content in a way that allows
+ * us to distinguish between specific cases that require different handling.
+ * So, for now, we have to hard-code the behaviour we want.
+ *
+ * The default behaviour is to assume MBAFF with input and output fieldpairs.
+ *
+ * Define ASSUME_PAFF_OVER_MBAFF to treat input as PAFF with separate input
+ * and output fields.
+ *
+ * Define ASSUME_TWO_INPUTS_ONE_OUTPUT to treat input as separate fields but
+ * output as a single fieldpair.
+ *
+ * Define both to mess up your playback.
+ */
+#define ASSUME_PAFF_OVER_MBAFF 0
+#define ASSUME_TWO_INPUTS_ONE_OUTPUT 0
 static inline CopyRet copy_frame(AVCodecContext *avctx,
                                  BC_DTS_PROC_OUT *output,
                                  void *data, int *data_size,
@@ -436,6 +453,7 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
 {
     BC_STATUS ret;
     BC_DTS_STATUS decoder_status;
+    uint8_t is_paff;
     uint8_t next_frame_same;
     uint8_t interlaced;
     uint8_t need_second_field;
@@ -461,11 +479,13 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
        return RET_ERROR;
     }
 
+    is_paff           = ASSUME_PAFF_OVER_MBAFF ||
+                        !(output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC);
     next_frame_same   = output->PicInfo.picture_number ==
                         (decoder_status.picNumFlags & ~0x40000000);
-    interlaced        = ((output->PicInfo.flags & VDEC_FLAG_INTERLACED_SRC) &&
-                         !(output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC)) ||
-                        next_frame_same || bottom_field || second_field;
+    interlaced        = ((output->PicInfo.flags &
+                          VDEC_FLAG_INTERLACED_SRC) && is_paff) ||
+                         next_frame_same || bottom_field || second_field;
     need_second_field = interlaced && (bottom_field == bottom_first);
 
     av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: next_frame_same: %u | %u | %u\n",
@@ -536,11 +556,8 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
         *(AVFrame *)data = priv->pic;
     }
 
-    /*
-     * There's no way to detect this case right now. You have to break
-     * normal MBAFF and/or PAFF handling to do it.
-     */
-    if (0 && output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC) {
+    if (ASSUME_TWO_INPUTS_ONE_OUTPUT &&
+        output->PicInfo.flags & VDEC_FLAG_UNKNOWN_SRC) {
         av_log(priv->avctx, AV_LOG_VERBOSE, "Fieldpair from two packets.\n");
         return RET_SKIP_NEXT_COPY;
     }
