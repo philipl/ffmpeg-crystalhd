@@ -601,7 +601,8 @@ static inline CopyRet receive_frame(AVCodecContext *avctx,
                 priv->last_picture = output.PicInfo.picture_number - 1;
             }
 
-            if (output.PicInfo.timeStamp == 0) {
+            if (avctx->codec->id == CODEC_ID_MPEG4 &&
+                output.PicInfo.timeStamp == 0) {
                 av_log(avctx, AV_LOG_VERBOSE,
                        "CrystalHD: Not returning packed frame twice.\n");
                 priv->last_picture++;
