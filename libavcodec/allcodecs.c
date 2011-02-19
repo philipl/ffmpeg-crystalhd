@@ -146,7 +146,6 @@ void avcodec_register_all(void)
     REGISTER_DECODER (MPEG4_VDPAU, mpeg4_vdpau);
     REGISTER_DECODER (MPEGVIDEO, mpegvideo);
     REGISTER_DECODER (MPEG_VDPAU, mpeg_vdpau);
-    REGISTER_DECODER (MPEG1_CRYSTALHD, mpeg1_crystalhd);
     REGISTER_DECODER (MPEG1_VDPAU, mpeg1_vdpau);
     REGISTER_DECODER (MPEG2_CRYSTALHD, mpeg2_crystalhd);
     REGISTER_DECODER (MSMPEG4_CRYSTALHD, msmpeg4_crystalhd);

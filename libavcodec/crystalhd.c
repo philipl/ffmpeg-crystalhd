@@ -141,8 +141,6 @@ static inline BC_MEDIA_SUBTYPE id2subtype(CHDContext *priv, enum CodecID id)
         return BC_MSUBTYPE_DIVX;
     case CODEC_ID_MSMPEG4V3:
         return BC_MSUBTYPE_DIVX311;
-    case CODEC_ID_MPEG1VIDEO:
-        return BC_MSUBTYPE_MPEG1VIDEO;
     case CODEC_ID_MPEG2VIDEO:
         return BC_MSUBTYPE_MPEG2VIDEO;
     case CODEC_ID_VC1:
@@ -403,7 +401,6 @@ static av_cold int init(AVCodecContext *avctx)
     case BC_MSUBTYPE_WVC1:
     case BC_MSUBTYPE_WMV3:
     case BC_MSUBTYPE_WMVA:
-    case BC_MSUBTYPE_MPEG1VIDEO:
     case BC_MSUBTYPE_MPEG2VIDEO:
     case BC_MSUBTYPE_DIVX:
     case BC_MSUBTYPE_DIVX311:
@@ -853,22 +850,6 @@ AVCodec ff_h264_crystalhd_decoder = {
     .capabilities   = CODEC_CAP_DR1 | CODEC_CAP_DELAY,
     .flush          = flush,
     .long_name      = NULL_IF_CONFIG_SMALL("H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (CrystalHD acceleration)"),
-    .pix_fmts       = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
-};
-#endif
-
-#if CONFIG_MPEG1_CRYSTALHD_DECODER
-AVCodec ff_mpeg1_crystalhd_decoder = {
-    .name           = "mpeg1_crystalhd",
-    .type           = AVMEDIA_TYPE_VIDEO,
-    .id             = CODEC_ID_MPEG1VIDEO,
-    .priv_data_size = sizeof(CHDContext),
-    .init           = init,
-    .close          = uninit,
-    .decode         = decode,
-    .capabilities   = CODEC_CAP_DR1 | CODEC_CAP_DELAY,
-    .flush          = flush,
-    .long_name      = NULL_IF_CONFIG_SMALL("MPEG-1 Video (CrystalHD acceleration)"),
     .pix_fmts       = (const enum PixelFormat[]){PIX_FMT_YUYV422, PIX_FMT_NONE},
 };
 #endif
