@@ -758,6 +758,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                  */
                 av_log(avctx, AV_LOG_VERBOSE, "Trying to get second field.\n");
                 while (1) {
+                    usleep(13000);
                     ret = DtsGetDriverStatus(dev, &decoder_status);
                     if (ret == BC_STS_SUCCESS &&
                         decoder_status.ReadyListCount > 0) {
@@ -766,7 +767,6 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                             rec_ret == RET_ERROR)
                             break;
                     }
-                    usleep(10000);
                 }
                 av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: Got second field.\n");
             }
@@ -787,7 +787,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
          * valid pts.
          */
     } while (rec_ret == RET_COPY_AGAIN);
-    usleep(10000);
+    usleep(14000);
     return len;
 }
 
