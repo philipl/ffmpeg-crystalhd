@@ -737,10 +737,6 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
     do {
         rec_ret = receive_frame(avctx, data, data_size, 0);
         if (rec_ret == 0 && *data_size == 0) {
-            /*
-             * XXX: There's more than just mpeg2 vs h.264 interlaced content,
-             * and I don't know which category each of those will fall in to.
-             */
             if (avctx->codec->id == CODEC_ID_H264) {
                 /*
                  * This case is for when the encoded fields are stored
@@ -758,7 +754,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                  * we grab the second field before returning, we'll slip another
                  * frame in the pipeline and if that happens a lot, we're sunk.
                  * So we have to get that second field now.
-                 * Interlaced mpeg2 is an example of this.
+                 * Interlaced mpeg2 and vc1 are examples of this.
                  */
                 av_log(avctx, AV_LOG_VERBOSE, "Trying to get second field.\n");
                 while (1) {
