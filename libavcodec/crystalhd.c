@@ -552,11 +552,11 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
     if (priv->is_70012) {
         int pStride;
 
-        if (width < 720)
+        if (width <= 720)
             pStride = 720;
-        else if (width < 1280)
+        else if (width <= 1280)
             pStride = 1280;
-        else if (width < 1080)
+        else if (width <= 1080)
             pStride = 1080;
         sStride = av_image_get_linesize(avctx->pix_fmt, pStride, 0);
     } else {
