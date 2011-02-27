@@ -118,7 +118,6 @@ typedef struct {
     uint8_t is_70012;
     uint8_t *sps_pps_buf;
     uint32_t sps_pps_size;
-    uint8_t nal_length_size;
     uint8_t is_nal;
     uint8_t output_ready;
     uint8_t skip_next_output;
