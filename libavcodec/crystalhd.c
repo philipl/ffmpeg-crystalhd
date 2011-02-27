@@ -775,7 +775,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
     if (decoder_status.ReadyListCount == 0 || priv->output_ready < 2) {
         if (decoder_status.ReadyListCount != 0)
             priv->output_ready++;
-        usleep(50000);
+        usleep(10000);
         av_log(avctx, AV_LOG_INFO, "CrystalHD: No frames ready. Returning\n");
         return len;
     }
