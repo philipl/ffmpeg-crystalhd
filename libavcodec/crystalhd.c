@@ -91,6 +91,10 @@
 #define OUTPUT_PROC_TIMEOUT 50
 /* Step between fake timestamps passed to hardware in units of 100ns */
 #define TIMESTAMP_UNIT 100000
+/* Initial value in us of the wait in decode() */
+#define BASE_WAIT 10000
+/* Increment in us to adjust wait in decode() */
+#define WAIT_UNIT 1000
 
 
 /*****************************************************************************
@@ -121,6 +125,7 @@ typedef struct {
     uint8_t is_nal;
     uint8_t output_ready;
     uint8_t skip_next_output;
+    uint64_t decode_wait;
 
     uint64_t last_picture;
 
@@ -288,6 +293,7 @@ static void flush(AVCodecContext *avctx)
     priv->last_picture     = -1;
     priv->output_ready     = 0;
     priv->skip_next_output = 0;
+    priv->decode_wait      = BASE_WAIT;
     /* Flush mode 4 flushes all software and hardware buffers. */
     DtsFlushInput(priv->dev, 4);
 }
@@ -353,6 +359,7 @@ static av_cold int init(AVCodecContext *avctx)
     priv->avctx        = avctx;
     priv->is_nal       = avctx->extradata_size > 0 && *(avctx->extradata) == 1;
     priv->last_picture = -1;
+    priv->decode_wait  = BASE_WAIT;
 
     subtype = id2subtype(priv, avctx->codec->id);
     switch (subtype) {
@@ -734,7 +741,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
             if (ret == BC_STS_BUSY) {
                 av_log(avctx, AV_LOG_WARNING,
                        "CrystalHD: ProcInput returned busy\n");
-                usleep(10000);
+                usleep(BASE_WAIT);
                 return AVERROR(EBUSY);
             } else if (ret != BC_STS_SUCCESS) {
                 av_log(avctx, AV_LOG_ERROR,
@@ -771,10 +778,21 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
      * that two more iterations were needed before ProcOutput would
      * succeed.
      */
-    if (decoder_status.ReadyListCount == 0 || priv->output_ready < 2) {
+    if (priv->output_ready < 2) {
         if (decoder_status.ReadyListCount != 0)
             priv->output_ready++;
-        usleep(10000);
+        usleep(BASE_WAIT);
+        av_log(avctx, AV_LOG_INFO, "CrystalHD: Filling pipeline.\n");
+        return len;
+    } else if (decoder_status.ReadyListCount == 0) {
+        /*
+         * After the pipeline is established, if we encounter a lack of frames
+         * that probably means we're not giving the hardware enough time to
+         * decode them, so start increasing the wait time at the end of a
+         * decode call.
+         */
+        usleep(BASE_WAIT);
+        priv->decode_wait += WAIT_UNIT;
         av_log(avctx, AV_LOG_INFO, "CrystalHD: No frames ready. Returning\n");
         return len;
     }
@@ -803,7 +821,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
                  */
                 av_log(avctx, AV_LOG_VERBOSE, "Trying to get second field.\n");
                 while (1) {
-                    usleep(10000);
+                    usleep(priv->decode_wait);
                     ret = DtsGetDriverStatus(dev, &decoder_status);
                     if (ret == BC_STS_SUCCESS &&
                         decoder_status.ReadyListCount > 0) {
@@ -832,7 +850,7 @@ static int decode(AVCodecContext *avctx, void *data, int *data_size, AVPacket *a
          * valid pts.
          */
     } while (rec_ret == RET_COPY_AGAIN);
-    usleep(10000);
+    usleep(priv->decode_wait);
     return len;
 }
 
