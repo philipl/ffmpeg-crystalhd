@@ -124,6 +124,7 @@ typedef struct {
     uint32_t sps_pps_size;
     uint8_t is_nal;
     uint8_t output_ready;
+    uint8_t need_second_field;
     uint8_t skip_next_output;
     uint64_t decode_wait;
 
@@ -289,11 +290,16 @@ static void flush(AVCodecContext *avctx)
 {
     CHDContext *priv = avctx->priv_data;
 
-    avctx->has_b_frames    = 0;
-    priv->last_picture     = -1;
-    priv->output_ready     = 0;
-    priv->skip_next_output = 0;
-    priv->decode_wait      = BASE_WAIT;
+    avctx->has_b_frames     = 0;
+    priv->last_picture      = -1;
+    priv->output_ready      = 0;
+    priv->need_second_field = 0;
+    priv->skip_next_output  = 0;
+    priv->decode_wait       = BASE_WAIT;
+
+    if (priv->pic.data[0])
+        avctx->release_buffer(avctx, &priv->pic);
+
     /* Flush mode 4 flushes all software and hardware buffers. */
     DtsFlushInput(priv->dev, 4);
 }
@@ -508,7 +514,6 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
     uint8_t is_paff;
     uint8_t next_frame_same;
     uint8_t interlaced;
-    uint8_t need_second_field;
 
     CHDContext *priv = avctx->priv_data;
 
@@ -538,20 +543,23 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
     interlaced        = ((output->PicInfo.flags &
                           VDEC_FLAG_INTERLACED_SRC) && is_paff) ||
                          next_frame_same || bottom_field || second_field;
-    /*
-     * XXX: Is the first field always the first one encountered?
-     */
-    need_second_field = interlaced && !bottom_field;
 
     av_log(avctx, AV_LOG_VERBOSE, "CrystalHD: next_frame_same: %u | %u | %u\n",
            next_frame_same, output->PicInfo.picture_number,
            decoder_status.picNumFlags & ~0x40000000);
 
+    if (priv->pic.data[0] && !priv->need_second_field)
+        avctx->release_buffer(avctx, &priv->pic);
+
+    priv->need_second_field = interlaced && !priv->need_second_field;
+
     priv->pic.buffer_hints = FF_BUFFER_HINTS_VALID | FF_BUFFER_HINTS_PRESERVE |
                              FF_BUFFER_HINTS_REUSABLE;
-    if(avctx->reget_buffer(avctx, &priv->pic) < 0) {
-        av_log(avctx, AV_LOG_ERROR, "reget_buffer() failed\n");
-        return RET_ERROR;
+    if (!priv->pic.data[0]) {
+        if (avctx->get_buffer(avctx, &priv->pic) < 0) {
+            av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
+            return RET_ERROR;
+        }
     }
 
     bwidth = av_image_get_linesize(avctx->pix_fmt, width, 0);
@@ -606,7 +614,7 @@ static inline CopyRet copy_frame(AVCodecContext *avctx,
                priv->pic.pkt_pts);
     }
 
-    if (!need_second_field) {
+    if (!priv->need_second_field) {
         *data_size       = sizeof(AVFrame);
         *(AVFrame *)data = priv->pic;
     }
