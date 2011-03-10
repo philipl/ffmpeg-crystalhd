@@ -84,7 +84,7 @@
 #include <libcrystalhd/libcrystalhd_if.h>
 
 #include "avcodec.h"
-#include "libavcore/imgutils.h"
+#include "libavutil/imgutils.h"
 #include "libavutil/intreadwrite.h"
 
 /* Timeout parameter passed to DtsProcOutput() in us */
